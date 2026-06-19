@@ -1,0 +1,169 @@
+import { spawn } from "child_process";
+export class TypeLispLspClient {
+    typelispPath;
+    stdlibRoots;
+    process = null;
+    requestId = 0;
+    pending = new Map();
+    buffer = "";
+    running = false;
+    constructor(typelispPath, stdlibRoots = []) {
+        this.typelispPath = typelispPath;
+        this.stdlibRoots = stdlibRoots;
+    }
+    start() {
+        return new Promise((resolve, reject) => {
+            const cmd = [this.typelispPath, "lsp"];
+            for (const root of this.stdlibRoots) {
+                cmd.push("--stdlib-root", root);
+            }
+            this.process = spawn(cmd[0], cmd.slice(1), {
+                stdio: ["pipe", "pipe", "pipe"],
+            });
+            this.running = true;
+            this.process.stdout?.on("data", (data) => {
+                this.buffer += data.toString("utf-8");
+                this.processBuffer();
+            });
+            this.process.stderr?.on("data", (data) => {
+                // LSP servers log diagnostics to stderr, ignore
+            });
+            this.process.on("error", reject);
+            // Send initialize
+            this.sendRequest("initialize", {
+                processId: process.pid,
+                rootUri: null,
+                capabilities: {},
+            }).then(() => resolve()).catch(reject);
+        });
+    }
+    stop() {
+        this.running = false;
+        if (this.process) {
+            this.process.stdin?.end();
+            this.process.kill();
+            this.process = null;
+        }
+    }
+    processBuffer() {
+        while (true) {
+            const headerMatch = this.buffer.match(/Content-Length: (\d+)\r\n\r\n/);
+            if (!headerMatch)
+                break;
+            const contentLength = parseInt(headerMatch[1], 10);
+            const headerEnd = headerMatch.index + headerMatch[0].length;
+            if (this.buffer.length < headerEnd + contentLength)
+                break;
+            const content = this.buffer.slice(headerEnd, headerEnd + contentLength);
+            this.buffer = this.buffer.slice(headerEnd + contentLength);
+            try {
+                const msg = JSON.parse(content);
+                if (msg.id !== undefined && this.pending.has(msg.id)) {
+                    const resolve = this.pending.get(msg.id);
+                    this.pending.delete(msg.id);
+                    resolve(msg);
+                }
+            }
+            catch (e) {
+                // Ignore parse errors
+            }
+        }
+    }
+    sendRequest(method, params) {
+        return new Promise((resolve) => {
+            this.requestId++;
+            const id = this.requestId;
+            this.pending.set(id, resolve);
+            const msg = {
+                jsonrpc: "2.0",
+                id,
+                method,
+                params,
+            };
+            const content = JSON.stringify(msg);
+            const header = `Content-Length: ${Buffer.byteLength(content, "utf-8")}\r\n\r\n`;
+            this.process?.stdin?.write(header + content);
+        });
+    }
+    openDocument(uri, text) {
+        return this.sendRequest("textDocument/didOpen", {
+            textDocument: { uri, languageId: "typelisp", version: 1, text },
+        });
+    }
+    // tl/ methods
+    async listFunctions(uri) {
+        const resp = await this.sendRequest("tl/listFunctions", {
+            textDocument: { uri },
+        });
+        return resp.result?.functions || [];
+    }
+    async appendFunction(uri, newText) {
+        const resp = await this.sendRequest("tl/appendFunction", {
+            textDocument: { uri },
+            newText,
+        });
+        return {
+            success: resp.result?.success || false,
+            text: resp.result?.text,
+            error: resp.error?.message,
+        };
+    }
+    async replaceFunction(uri, name, newText) {
+        const resp = await this.sendRequest("tl/structuralReplace", {
+            textDocument: { uri },
+            name,
+            newText,
+        });
+        return {
+            success: resp.result?.success || false,
+            text: resp.result?.text,
+            error: resp.error?.message,
+        };
+    }
+    async replaceBody(uri, name, newBody) {
+        const resp = await this.sendRequest("tl/replaceBody", {
+            textDocument: { uri },
+            name,
+            newBody,
+        });
+        return {
+            success: resp.result?.success || false,
+            text: resp.result?.text,
+            error: resp.error?.message,
+        };
+    }
+    async replacePattern(uri, name, oldPattern, newPattern) {
+        const resp = await this.sendRequest("tl/replacePattern", {
+            textDocument: { uri },
+            name,
+            oldPattern,
+            newPattern,
+        });
+        return {
+            success: resp.result?.success || false,
+            text: resp.result?.text,
+            error: resp.error?.message,
+        };
+    }
+    async deleteFunction(uri, name) {
+        const resp = await this.sendRequest("tl/deleteFunction", {
+            textDocument: { uri },
+            name,
+        });
+        return {
+            success: resp.result?.success || false,
+            text: resp.result?.text,
+            error: resp.error?.message,
+        };
+    }
+    async format(uri) {
+        const resp = await this.sendRequest("tl/format", {
+            textDocument: { uri },
+        });
+        return {
+            success: resp.result?.success || false,
+            text: resp.result?.text,
+            error: resp.error?.message,
+        };
+    }
+}

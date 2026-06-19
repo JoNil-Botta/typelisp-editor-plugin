@@ -1,0 +1,27 @@
+import { s as normalizeOptionalLowercaseString } from "./string-coerce-mnp54Vah.js";
+//#region src/plugins/provider-registry-shared.ts
+/** Normalizes provider ids used by capability-provider registries. */
+function normalizeCapabilityProviderId(providerId) {
+	return normalizeOptionalLowercaseString(providerId);
+}
+/** Builds canonical and alias lookup maps for capability providers. */
+function buildCapabilityProviderMaps(providers, normalizeId = normalizeCapabilityProviderId) {
+	const canonical = /* @__PURE__ */ new Map();
+	const aliases = /* @__PURE__ */ new Map();
+	for (const provider of providers) {
+		const id = normalizeId(provider.id);
+		if (!id) continue;
+		canonical.set(id, provider);
+		aliases.set(id, provider);
+		for (const alias of provider.aliases ?? []) {
+			const normalizedAlias = normalizeId(alias);
+			if (normalizedAlias) aliases.set(normalizedAlias, provider);
+		}
+	}
+	return {
+		canonical,
+		aliases
+	};
+}
+//#endregion
+export { normalizeCapabilityProviderId as n, buildCapabilityProviderMaps as t };

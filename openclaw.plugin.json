@@ -1,0 +1,37 @@
+{
+  "id": "typelisp-editor",
+  "name": "TypeLisp Editor",
+  "description": "Structural editing tools for TypeLisp (.tl) files via LSP.",
+  "version": "0.1.0",
+  "configSchema": {
+    "type": "object",
+    "properties": {
+      "typelispPath": {
+        "type": "string",
+        "description": "Path to typelisp binary."
+      },
+      "stdlibRoots": {
+        "type": "array",
+        "items": {
+          "type": "string"
+        },
+        "description": "Additional stdlib roots."
+      }
+    }
+  },
+  "activation": {
+    "onStartup": true
+  },
+  "contracts": {
+    "tools": [
+      "typelisp_edit_check",
+      "typelisp_edit_list",
+      "typelisp_edit_append",
+      "typelisp_edit_replace",
+      "typelisp_edit_replace_body",
+      "typelisp_edit_replace_pattern",
+      "typelisp_edit_delete",
+      "typelisp_edit_format"
+    ]
+  }
+}
