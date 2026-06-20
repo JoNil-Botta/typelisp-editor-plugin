@@ -29,7 +29,10 @@ export declare class TypeLispLspClient {
         text?: string;
         error?: string;
     }>;
-    replaceFunction(uri: string, name: string, newText: string): Promise<{
+    replaceFunction(uri: string, name: string | undefined, newText: string, position?: {
+        line: number;
+        character: number;
+    }): Promise<{
         success: boolean;
         text?: string;
         error?: string;
@@ -52,6 +55,46 @@ export declare class TypeLispLspClient {
     format(uri: string): Promise<{
         success: boolean;
         text?: string;
+        error?: string;
+    }>;
+    deleteFunctionAt(uri: string, position: {
+        line: number;
+        character: number;
+    }): Promise<{
+        success: boolean;
+        text?: string;
+        error?: string;
+    }>;
+    insertAfter(uri: string, position: {
+        line: number;
+        character: number;
+    }, newText: string): Promise<{
+        success: boolean;
+        text?: string;
+        error?: string;
+    }>;
+    replaceBodyAt(uri: string, position: {
+        line: number;
+        character: number;
+    }, newBody: string): Promise<{
+        success: boolean;
+        text?: string;
+        error?: string;
+    }>;
+    replacePatternAt(uri: string, position: {
+        line: number;
+        character: number;
+    }, oldPattern: string, newPattern: string): Promise<{
+        success: boolean;
+        text?: string;
+        error?: string;
+    }>;
+    readFormAt(uri: string, position: {
+        line: number;
+        character: number;
+    }, outer?: number): Promise<{
+        success: boolean;
+        form?: string;
         error?: string;
     }>;
 }

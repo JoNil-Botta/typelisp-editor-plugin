@@ -112,21 +112,57 @@ export default defineToolPlugin({
             },
         }),
         tool({
-            name: "typelisp_edit_replace",
-            label: "Replace TypeLisp Form",
-            description: "Replace a top-level form by name with new text.",
+            name: "typelisp_edit_insert",
+            label: "Insert TypeLisp Form",
+            description: "Insert a new form after the form at a given position.",
             parameters: Type.Object({
                 file: Type.String({ description: "Path to the .tl file to edit." }),
-                name: Type.String({ description: "Name of the form to replace." }),
-                new_form: Type.String({ description: "New form text." }),
+                position: Type.Object({
+                    line: Type.Number({ description: "0-indexed line number." }),
+                    character: Type.Number({ description: "0-indexed character offset." }),
+                }),
+                form: Type.String({ description: "The new form text (e.g., '(define (foo ...) ...)' )." }),
                 dry_run: Type.Optional(Type.Boolean({ description: "Preview diff without writing." })),
             }),
-            execute: async ({ file, name, new_form, dry_run }, config) => {
+            execute: async ({ file, position, form, dry_run }, config) => {
                 const client = await getClient(config.typelispPath, config.stdlibRoots);
                 const uri = makeUri(file);
                 const text = readFile(file);
                 await client.openDocument(uri, text);
-                const result = await client.replaceFunction(uri, name, new_form);
+                const result = await client.insertAfter(uri, position, form);
+                if (!result.success) {
+                    return { success: false, error: result.error || "insertAfter failed" };
+                }
+                if (dry_run) {
+                    return { success: true, dryRun: true, diff: { old: text, new: result.text } };
+                }
+                writeFile(file, result.text);
+                return { success: true, message: `Inserted form after position (${position.line}, ${position.character}) in ${file}` };
+            },
+        }),
+        tool({
+            name: "typelisp_edit_replace",
+            label: "Replace TypeLisp Form",
+            description: "Replace a form by name (top-level) or at a position (any level).",
+            parameters: Type.Object({
+                file: Type.String({ description: "Path to the .tl file to edit." }),
+                name: Type.Optional(Type.String({ description: "Name of the top-level form to replace." })),
+                position: Type.Optional(Type.Object({
+                    line: Type.Number({ description: "0-indexed line number." }),
+                    character: Type.Number({ description: "0-indexed character offset." }),
+                }, { description: "Position-based replacement (alternative to name)." })),
+                new_form: Type.String({ description: "New form text." }),
+                dry_run: Type.Optional(Type.Boolean({ description: "Preview diff without writing." })),
+            }),
+            execute: async ({ file, name, position, new_form, dry_run }, config) => {
+                if (!name && !position) {
+                    return { success: false, error: "Either 'name' or 'position' is required." };
+                }
+                const client = await getClient(config.typelispPath, config.stdlibRoots);
+                const uri = makeUri(file);
+                const text = readFile(file);
+                await client.openDocument(uri, text);
+                const result = await client.replaceFunction(uri, name, new_form, position);
                 if (!result.success) {
                     return { success: false, error: result.error || "replaceFunction failed" };
                 }
@@ -134,25 +170,35 @@ export default defineToolPlugin({
                     return { success: true, dryRun: true, diff: { old: text, new: result.text } };
                 }
                 writeFile(file, result.text);
-                return { success: true, message: `Replaced '${name}' in ${file}` };
+                const desc = position ? `at line ${position.line}, col ${position.character}` : `'${name}'`;
+                return { success: true, message: `Replaced ${desc} in ${file}` };
             },
         }),
         tool({
             name: "typelisp_edit_replace_body",
             label: "Replace TypeLisp Function Body",
-            description: "Replace the body of a function, keeping its signature.",
+            description: "Replace the body of a function by name or at a position.",
             parameters: Type.Object({
                 file: Type.String({ description: "Path to the .tl file to edit." }),
-                name: Type.String({ description: "Name of the function." }),
+                name: Type.Optional(Type.String({ description: "Name of the function." })),
+                position: Type.Optional(Type.Object({
+                    line: Type.Number({ description: "0-indexed line number." }),
+                    character: Type.Number({ description: "0-indexed character offset." }),
+                }, { description: "Position-based replacement (alternative to name)." })),
                 new_body: Type.String({ description: "New body text." }),
                 dry_run: Type.Optional(Type.Boolean({ description: "Preview diff without writing." })),
             }),
-            execute: async ({ file, name, new_body, dry_run }, config) => {
+            execute: async ({ file, name, position, new_body, dry_run }, config) => {
+                if (!name && !position) {
+                    return { success: false, error: "Either 'name' or 'position' is required." };
+                }
                 const client = await getClient(config.typelispPath, config.stdlibRoots);
                 const uri = makeUri(file);
                 const text = readFile(file);
                 await client.openDocument(uri, text);
-                const result = await client.replaceBody(uri, name, new_body);
+                const result = name
+                    ? await client.replaceBody(uri, name, new_body)
+                    : await client.replaceBodyAt(uri, position, new_body);
                 if (!result.success) {
                     return { success: false, error: result.error || "replaceBody failed" };
                 }
@@ -160,26 +206,36 @@ export default defineToolPlugin({
                     return { success: true, dryRun: true, diff: { old: text, new: result.text } };
                 }
                 writeFile(file, result.text);
-                return { success: true, message: `Replaced body of '${name}' in ${file}` };
+                const desc = position ? `at line ${position.line}, col ${position.character}` : `'${name}'`;
+                return { success: true, message: `Replaced body of ${desc} in ${file}` };
             },
         }),
         tool({
             name: "typelisp_edit_replace_pattern",
             label: "Replace Pattern in TypeLisp Function",
-            description: "Whole-word pattern replacement within a function body.",
+            description: "Whole-word pattern replacement within a function body by name or at a position.",
             parameters: Type.Object({
                 file: Type.String({ description: "Path to the .tl file to edit." }),
-                name: Type.String({ description: "Name of the function." }),
+                name: Type.Optional(Type.String({ description: "Name of the function." })),
+                position: Type.Optional(Type.Object({
+                    line: Type.Number({ description: "0-indexed line number." }),
+                    character: Type.Number({ description: "0-indexed character offset." }),
+                }, { description: "Position-based replacement (alternative to name)." })),
                 old_pattern: Type.String({ description: "Pattern to replace." }),
                 new_pattern: Type.String({ description: "Replacement text." }),
                 dry_run: Type.Optional(Type.Boolean({ description: "Preview diff without writing." })),
             }),
-            execute: async ({ file, name, old_pattern, new_pattern, dry_run }, config) => {
+            execute: async ({ file, name, position, old_pattern, new_pattern, dry_run }, config) => {
+                if (!name && !position) {
+                    return { success: false, error: "Either 'name' or 'position' is required." };
+                }
                 const client = await getClient(config.typelispPath, config.stdlibRoots);
                 const uri = makeUri(file);
                 const text = readFile(file);
                 await client.openDocument(uri, text);
-                const result = await client.replacePattern(uri, name, old_pattern, new_pattern);
+                const result = name
+                    ? await client.replacePattern(uri, name, old_pattern, new_pattern)
+                    : await client.replacePatternAt(uri, position, old_pattern, new_pattern);
                 if (!result.success) {
                     return { success: false, error: result.error || "replacePattern failed" };
                 }
@@ -187,24 +243,34 @@ export default defineToolPlugin({
                     return { success: true, dryRun: true, diff: { old: text, new: result.text } };
                 }
                 writeFile(file, result.text);
-                return { success: true, message: `Replaced pattern in '${name}' in ${file}` };
+                const desc = position ? `at line ${position.line}, col ${position.character}` : `'${name}'`;
+                return { success: true, message: `Replaced pattern in ${desc} in ${file}` };
             },
         }),
         tool({
             name: "typelisp_edit_delete",
             label: "Delete TypeLisp Form",
-            description: "Delete a top-level form by name.",
+            description: "Delete a form by name (top-level) or at a position (any level).",
             parameters: Type.Object({
                 file: Type.String({ description: "Path to the .tl file to edit." }),
-                name: Type.String({ description: "Name of the form to delete." }),
+                name: Type.Optional(Type.String({ description: "Name of the top-level form to delete." })),
+                position: Type.Optional(Type.Object({
+                    line: Type.Number({ description: "0-indexed line number." }),
+                    character: Type.Number({ description: "0-indexed character offset." }),
+                }, { description: "Position-based deletion (alternative to name)." })),
                 dry_run: Type.Optional(Type.Boolean({ description: "Preview diff without writing." })),
             }),
-            execute: async ({ file, name, dry_run }, config) => {
+            execute: async ({ file, name, position, dry_run }, config) => {
+                if (!name && !position) {
+                    return { success: false, error: "Either 'name' or 'position' is required." };
+                }
                 const client = await getClient(config.typelispPath, config.stdlibRoots);
                 const uri = makeUri(file);
                 const text = readFile(file);
                 await client.openDocument(uri, text);
-                const result = await client.deleteFunction(uri, name);
+                const result = name
+                    ? await client.deleteFunction(uri, name)
+                    : await client.deleteFunctionAt(uri, position);
                 if (!result.success) {
                     return { success: false, error: result.error || "deleteFunction failed" };
                 }
@@ -212,7 +278,8 @@ export default defineToolPlugin({
                     return { success: true, dryRun: true, diff: { old: text, new: result.text } };
                 }
                 writeFile(file, result.text);
-                return { success: true, message: `Deleted '${name}' from ${file}` };
+                const desc = position ? `at line ${position.line}, col ${position.character}` : `'${name}'`;
+                return { success: true, message: `Deleted ${desc} from ${file}` };
             },
         }),
         tool({
@@ -237,6 +304,30 @@ export default defineToolPlugin({
                 }
                 writeFile(file, result.text);
                 return { success: true, message: `Formatted ${file}` };
+            },
+        }),
+        tool({
+            name: "typelisp_edit_read",
+            label: "Read TypeLisp Form",
+            description: "Read the form at a given position in a .tl file. Optionally returns an outer enclosing form.",
+            parameters: Type.Object({
+                file: Type.String({ description: "Path to the .tl file." }),
+                position: Type.Object({
+                    line: Type.Number({ description: "0-indexed line number." }),
+                    character: Type.Number({ description: "0-indexed character offset." }),
+                }),
+                outer: Type.Optional(Type.Number({ description: "How many levels outward to go (0 = innermost form, 1 = enclosing form, etc.)." })),
+            }),
+            execute: async ({ file, position, outer }, config) => {
+                const client = await getClient(config.typelispPath, config.stdlibRoots);
+                const uri = makeUri(file);
+                const text = readFile(file);
+                await client.openDocument(uri, text);
+                const result = await client.readFormAt(uri, position, outer ?? 0);
+                if (!result.success) {
+                    return { success: false, error: result.error || "readFormAt failed" };
+                }
+                return { success: true, form: result.form };
             },
         }),
     ],

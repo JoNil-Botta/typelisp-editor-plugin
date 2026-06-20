@@ -108,12 +108,16 @@ export class TypeLispLspClient {
             error: resp.error?.message,
         };
     }
-    async replaceFunction(uri, name, newText) {
-        const resp = await this.sendRequest("tl/structuralReplace", {
+    async replaceFunction(uri, name, newText, position) {
+        const params = {
             textDocument: { uri },
-            name,
             newText,
-        });
+        };
+        if (name)
+            params.name = name;
+        if (position)
+            params.position = position;
+        const resp = await this.sendRequest("tl/structuralReplace", params);
         return {
             success: resp.result?.success || false,
             text: resp.result?.text,
@@ -163,6 +167,66 @@ export class TypeLispLspClient {
         return {
             success: resp.result?.success || false,
             text: resp.result?.text,
+            error: resp.error?.message,
+        };
+    }
+    async deleteFunctionAt(uri, position) {
+        const resp = await this.sendRequest("tl/deleteAt", {
+            textDocument: { uri },
+            position,
+        });
+        return {
+            success: resp.result?.success || false,
+            text: resp.result?.text,
+            error: resp.error?.message,
+        };
+    }
+    async insertAfter(uri, position, newText) {
+        const resp = await this.sendRequest("tl/insertAfter", {
+            textDocument: { uri },
+            position,
+            newText,
+        });
+        return {
+            success: resp.result?.success || false,
+            text: resp.result?.text,
+            error: resp.error?.message,
+        };
+    }
+    async replaceBodyAt(uri, position, newBody) {
+        const resp = await this.sendRequest("tl/replaceBodyAt", {
+            textDocument: { uri },
+            position,
+            newBody,
+        });
+        return {
+            success: resp.result?.success || false,
+            text: resp.result?.text,
+            error: resp.error?.message,
+        };
+    }
+    async replacePatternAt(uri, position, oldPattern, newPattern) {
+        const resp = await this.sendRequest("tl/replacePatternAt", {
+            textDocument: { uri },
+            position,
+            oldPattern,
+            newPattern,
+        });
+        return {
+            success: resp.result?.success || false,
+            text: resp.result?.text,
+            error: resp.error?.message,
+        };
+    }
+    async readFormAt(uri, position, outer) {
+        const resp = await this.sendRequest("tl/readFormAt", {
+            textDocument: { uri },
+            position,
+            outer: outer ?? 0,
+        });
+        return {
+            success: resp.result?.success || false,
+            form: resp.result?.form,
             error: resp.error?.message,
         };
     }
