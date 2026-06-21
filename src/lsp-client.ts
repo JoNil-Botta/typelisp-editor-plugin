@@ -267,4 +267,36 @@ export class TypeLispLspClient {
       error: resp.error?.message,
     };
   }
+
+  async structuralMove(uri: string, name: string | undefined, position: { line: number; character: number } | undefined, direction: string): Promise<{ success: boolean; text?: string; error?: string }> {
+    const params: any = {
+      textDocument: { uri },
+      direction,
+    };
+    if (name) params.name = name;
+    if (position) params.position = position;
+
+    const resp = await this.sendRequest("tl/structuralMove", params);
+    return {
+      success: resp.result?.success || false,
+      text: resp.result?.text,
+      error: resp.error?.message,
+    };
+  }
+
+  async rename(uri: string, oldName: string | undefined, position: { line: number; character: number } | undefined, newName: string): Promise<{ success: boolean; text?: string; error?: string }> {
+    const params: any = {
+      textDocument: { uri },
+      newName,
+    };
+    if (oldName) params.oldName = oldName;
+    if (position) params.position = position;
+
+    const resp = await this.sendRequest("tl/rename", params);
+    return {
+      success: resp.result?.success || false,
+      text: resp.result?.text,
+      error: resp.error?.message,
+    };
+  }
 }
