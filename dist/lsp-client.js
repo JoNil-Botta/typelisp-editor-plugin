@@ -193,6 +193,17 @@ export class TypeLispLspClient {
             error: resp.error?.message,
         };
     }
+    async findPosition(uri, name, kind) {
+        const resp = await this.sendRequest("tl/findPosition", {
+            textDocument: { uri },
+            name,
+            ...(kind ? { kind } : {}),
+        });
+        if (resp.error) {
+            return null;
+        }
+        return resp.result ?? null;
+    }
     async replaceBodyAt(uri, position, newBody) {
         const resp = await this.sendRequest("tl/replaceBodyAt", {
             textDocument: { uri },
@@ -227,6 +238,38 @@ export class TypeLispLspClient {
         return {
             success: resp.result?.success || false,
             form: resp.result?.form,
+            error: resp.error?.message,
+        };
+    }
+    async structuralMove(uri, name, position, direction) {
+        const params = {
+            textDocument: { uri },
+            direction,
+        };
+        if (name)
+            params.name = name;
+        if (position)
+            params.position = position;
+        const resp = await this.sendRequest("tl/structuralMove", params);
+        return {
+            success: resp.result?.success || false,
+            text: resp.result?.text,
+            error: resp.error?.message,
+        };
+    }
+    async rename(uri, oldName, position, newName) {
+        const params = {
+            textDocument: { uri },
+            newName,
+        };
+        if (oldName)
+            params.oldName = oldName;
+        if (position)
+            params.position = position;
+        const resp = await this.sendRequest("tl/rename", params);
+        return {
+            success: resp.result?.success || false,
+            text: resp.result?.text,
             error: resp.error?.message,
         };
     }

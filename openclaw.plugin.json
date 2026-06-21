@@ -26,6 +26,7 @@
     "tools": [
       "typelisp_edit_check",
       "typelisp_edit_list",
+      "typelisp_edit_insert_after",
       "typelisp_edit_append",
       "typelisp_edit_replace",
       "typelisp_edit_replace_body",

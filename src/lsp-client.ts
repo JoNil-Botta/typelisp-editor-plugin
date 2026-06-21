@@ -228,6 +228,18 @@ export class TypeLispLspClient {
     };
   }
 
+  async findPosition(uri: string, name: string, kind?: string): Promise<{ line: number; character: number } | null> {
+    const resp = await this.sendRequest("tl/findPosition", {
+      textDocument: { uri },
+      name,
+      ...(kind ? { kind } : {}),
+    });
+    if (resp.error) {
+      return null;
+    }
+    return resp.result ?? null;
+  }
+
   async replaceBodyAt(uri: string, position: { line: number; character: number }, newBody: string): Promise<{ success: boolean; text?: string; error?: string }> {
     const resp = await this.sendRequest("tl/replaceBodyAt", {
       textDocument: { uri },

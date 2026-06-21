@@ -73,6 +73,10 @@ export declare class TypeLispLspClient {
         text?: string;
         error?: string;
     }>;
+    findPosition(uri: string, name: string, kind?: string): Promise<{
+        line: number;
+        character: number;
+    } | null>;
     replaceBodyAt(uri: string, position: {
         line: number;
         character: number;
@@ -95,6 +99,22 @@ export declare class TypeLispLspClient {
     }, outer?: number): Promise<{
         success: boolean;
         form?: string;
+        error?: string;
+    }>;
+    structuralMove(uri: string, name: string | undefined, position: {
+        line: number;
+        character: number;
+    } | undefined, direction: string): Promise<{
+        success: boolean;
+        text?: string;
+        error?: string;
+    }>;
+    rename(uri: string, oldName: string | undefined, position: {
+        line: number;
+        character: number;
+    } | undefined, newName: string): Promise<{
+        success: boolean;
+        text?: string;
         error?: string;
     }>;
 }

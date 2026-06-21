@@ -112,24 +112,34 @@ export default defineToolPlugin({
             },
         }),
         tool({
-            name: "typelisp_edit_insert",
-            label: "Insert TypeLisp Form",
-            description: "Insert a new form after the form at a given position.",
+            name: "typelisp_edit_insert_after",
+            label: "Insert TypeLisp Form After",
+            description: "Insert a new form after an existing one. Pass either 'name' (to insert after a named form) or 'position' (to insert after a specific position).",
             parameters: Type.Object({
                 file: Type.String({ description: "Path to the .tl file to edit." }),
-                position: Type.Object({
-                    line: Type.Number({ description: "0-indexed line number." }),
-                    character: Type.Number({ description: "0-indexed character offset." }),
-                }),
-                form: Type.String({ description: "The new form text (e.g., '(define (foo ...) ...)' )." }),
+                name: Type.Optional(Type.String({ description: "Name of the form to insert after (alternative to position)." })),
+                position: Type.Optional(Type.Object({ line: Type.Number(), character: Type.Number() }, { description: "Cursor position {line, character} (alternative to name)." })),
+                kind: Type.Optional(Type.String({ description: "Filter by kind when using name: function, struct, enum, macro, dispatch." })),
+                new_form: Type.String({ description: "New form text to insert." }),
                 dry_run: Type.Optional(Type.Boolean({ description: "Preview diff without writing." })),
             }),
-            execute: async ({ file, position, form, dry_run }, config) => {
+            execute: async ({ file, name, position, kind, new_form, dry_run }, config) => {
                 const client = await getClient(config.typelispPath, config.stdlibRoots);
                 const uri = makeUri(file);
                 const text = readFile(file);
-                await client.openDocument(uri, text);
-                const result = await client.insertAfter(uri, position, form);
+                client.openDocument(uri, text);
+                let pos = position;
+                if (name && !pos) {
+                    const found = await client.findPosition(uri, name, kind);
+                    if (!found) {
+                        return { success: false, error: `Form '${name}' not found${kind ? ` (kind: ${kind})` : ""}` };
+                    }
+                    pos = found;
+                }
+                if (!pos) {
+                    return { success: false, error: "Either 'name' or 'position' is required." };
+                }
+                const result = await client.insertAfter(uri, pos, new_form);
                 if (!result.success) {
                     return { success: false, error: result.error || "insertAfter failed" };
                 }
@@ -137,7 +147,8 @@ export default defineToolPlugin({
                     return { success: true, dryRun: true, diff: { old: text, new: result.text } };
                 }
                 writeFile(file, result.text);
-                return { success: true, message: `Inserted form after position (${position.line}, ${position.character}) in ${file}` };
+                const desc = name ? `after '${name}'` : `after position (${pos.line}, ${pos.character})`;
+                return { success: true, message: `Inserted form ${desc} in ${file}` };
             },
         }),
         tool({
@@ -328,6 +339,74 @@ export default defineToolPlugin({
                     return { success: false, error: result.error || "readFormAt failed" };
                 }
                 return { success: true, form: result.form };
+            },
+        }),
+        tool({
+            name: "typelisp_edit_structural_move",
+            label: "Move TypeLisp Form",
+            description: "Move a top-level form up or down by name or at a position.",
+            parameters: Type.Object({
+                file: Type.String({ description: "Path to the .tl file to edit." }),
+                name: Type.Optional(Type.String({ description: "Name of the top-level form to move." })),
+                position: Type.Optional(Type.Object({
+                    line: Type.Number({ description: "0-indexed line number." }),
+                    character: Type.Number({ description: "0-indexed character offset." }),
+                }, { description: "Position-based move (alternative to name)." })),
+                direction: Type.String({ description: "Direction to move: 'up' or 'down'." }),
+                dry_run: Type.Optional(Type.Boolean({ description: "Preview diff without writing." })),
+            }),
+            execute: async ({ file, name, position, direction, dry_run }, config) => {
+                if (!name && !position) {
+                    return { success: false, error: "Either 'name' or 'position' is required." };
+                }
+                const client = await getClient(config.typelispPath, config.stdlibRoots);
+                const uri = makeUri(file);
+                const text = readFile(file);
+                await client.openDocument(uri, text);
+                const result = await client.structuralMove(uri, name, position, direction);
+                if (!result.success) {
+                    return { success: false, error: result.error || "structuralMove failed" };
+                }
+                if (dry_run) {
+                    return { success: true, dryRun: true, diff: { old: text, new: result.text } };
+                }
+                writeFile(file, result.text);
+                const desc = position ? `at line ${position.line}, col ${position.character}` : `'${name}'`;
+                return { success: true, message: `Moved ${desc} ${direction} in ${file}` };
+            },
+        }),
+        tool({
+            name: "typelisp_edit_rename",
+            label: "Rename in TypeLisp File",
+            description: "Rename all occurrences of a name by old name or at a position.",
+            parameters: Type.Object({
+                file: Type.String({ description: "Path to the .tl file to edit." }),
+                name: Type.Optional(Type.String({ description: "Old name to replace." })),
+                position: Type.Optional(Type.Object({
+                    line: Type.Number({ description: "0-indexed line number." }),
+                    character: Type.Number({ description: "0-indexed character offset." }),
+                }, { description: "Position-based rename (alternative to name)." })),
+                new_name: Type.String({ description: "New name to replace with." }),
+                dry_run: Type.Optional(Type.Boolean({ description: "Preview diff without writing." })),
+            }),
+            execute: async ({ file, name, position, new_name, dry_run }, config) => {
+                if (!name && !position) {
+                    return { success: false, error: "Either 'name' or 'position' is required." };
+                }
+                const client = await getClient(config.typelispPath, config.stdlibRoots);
+                const uri = makeUri(file);
+                const text = readFile(file);
+                await client.openDocument(uri, text);
+                const result = await client.rename(uri, name, position, new_name);
+                if (!result.success) {
+                    return { success: false, error: result.error || "rename failed" };
+                }
+                if (dry_run) {
+                    return { success: true, dryRun: true, diff: { old: text, new: result.text } };
+                }
+                writeFile(file, result.text);
+                const desc = position ? `at line ${position.line}, col ${position.character}` : `'${name}'`;
+                return { success: true, message: `Renamed ${desc} to '${new_name}' in ${file}` };
             },
         }),
     ],
