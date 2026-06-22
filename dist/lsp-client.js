@@ -117,7 +117,7 @@ export class TypeLispLspClient {
             params.name = name;
         if (position)
             params.position = position;
-        const resp = await this.sendRequest("tl/structuralReplace", params);
+        const resp = await this.sendRequest("tl/replace", params);
         return {
             success: resp.result?.success || false,
             text: resp.result?.text,
@@ -171,7 +171,7 @@ export class TypeLispLspClient {
         };
     }
     async deleteFunctionAt(uri, position) {
-        const resp = await this.sendRequest("tl/deleteAt", {
+        const resp = await this.sendRequest("tl/delete", {
             textDocument: { uri },
             position,
         });
@@ -205,7 +205,7 @@ export class TypeLispLspClient {
         return resp.result ?? null;
     }
     async replaceBodyAt(uri, position, newBody) {
-        const resp = await this.sendRequest("tl/replaceBodyAt", {
+        const resp = await this.sendRequest("tl/replaceBody", {
             textDocument: { uri },
             position,
             newBody,
@@ -217,7 +217,7 @@ export class TypeLispLspClient {
         };
     }
     async replacePatternAt(uri, position, oldPattern, newPattern) {
-        const resp = await this.sendRequest("tl/replacePatternAt", {
+        const resp = await this.sendRequest("tl/replacePattern", {
             textDocument: { uri },
             position,
             oldPattern,
@@ -230,7 +230,7 @@ export class TypeLispLspClient {
         };
     }
     async readFormAt(uri, position, outer) {
-        const resp = await this.sendRequest("tl/readFormAt", {
+        const resp = await this.sendRequest("tl/read", {
             textDocument: { uri },
             position,
             outer: outer ?? 0,
@@ -241,7 +241,7 @@ export class TypeLispLspClient {
             error: resp.error?.message,
         };
     }
-    async structuralMove(uri, name, position, direction, destination) {
+    async move(uri, name, position, direction, destination) {
         const params = {
             textDocument: { uri },
         };
@@ -253,7 +253,7 @@ export class TypeLispLspClient {
             params.destination = destination;
         if (direction)
             params.direction = direction;
-        const resp = await this.sendRequest("tl/structuralMove", params);
+        const resp = await this.sendRequest("tl/move", params);
         return {
             success: resp.result?.success || false,
             text: resp.result?.text,
@@ -273,6 +273,39 @@ export class TypeLispLspClient {
         return {
             success: resp.result?.success || false,
             text: resp.result?.text,
+            error: resp.error?.message,
+        };
+    }
+    async expandMacro(uri, name) {
+        const resp = await this.sendRequest("tl/expandMacro", {
+            textDocument: { uri },
+            name,
+        });
+        return {
+            success: resp.result?.success || false,
+            text: resp.result?.text,
+            error: resp.error?.message,
+        };
+    }
+    async getType(uri, position) {
+        const resp = await this.sendRequest("tl/getType", {
+            textDocument: { uri },
+            position,
+        });
+        return {
+            success: resp.result?.success || false,
+            type: resp.result?.type,
+            error: resp.error?.message,
+        };
+    }
+    async findReferences(uri, name) {
+        const resp = await this.sendRequest("tl/findReferences", {
+            textDocument: { uri },
+            name,
+        });
+        return {
+            success: resp.result?.success || false,
+            references: resp.result?.references,
             error: resp.error?.message,
         };
     }

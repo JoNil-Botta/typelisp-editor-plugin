@@ -145,7 +145,7 @@ export class TypeLispLspClient {
     if (name) params.name = name;
     if (position) params.position = position;
 
-    const resp = await this.sendRequest("tl/structuralReplace", params);
+    const resp = await this.sendRequest("tl/replace", params);
     return {
       success: resp.result?.success || false,
       text: resp.result?.text,
@@ -204,7 +204,7 @@ export class TypeLispLspClient {
   }
 
   async deleteFunctionAt(uri: string, position: { line: number; character: number }): Promise<{ success: boolean; text?: string; error?: string }> {
-    const resp = await this.sendRequest("tl/deleteAt", {
+    const resp = await this.sendRequest("tl/delete", {
       textDocument: { uri },
       position,
     });
@@ -241,7 +241,7 @@ export class TypeLispLspClient {
   }
 
   async replaceBodyAt(uri: string, position: { line: number; character: number }, newBody: string): Promise<{ success: boolean; text?: string; error?: string }> {
-    const resp = await this.sendRequest("tl/replaceBodyAt", {
+    const resp = await this.sendRequest("tl/replaceBody", {
       textDocument: { uri },
       position,
       newBody,
@@ -254,7 +254,7 @@ export class TypeLispLspClient {
   }
 
   async replacePatternAt(uri: string, position: { line: number; character: number }, oldPattern: string, newPattern: string): Promise<{ success: boolean; text?: string; error?: string }> {
-    const resp = await this.sendRequest("tl/replacePatternAt", {
+    const resp = await this.sendRequest("tl/replacePattern", {
       textDocument: { uri },
       position,
       oldPattern,
@@ -268,7 +268,7 @@ export class TypeLispLspClient {
   }
 
   async readFormAt(uri: string, position: { line: number; character: number }, outer?: number): Promise<{ success: boolean; form?: string; error?: string }> {
-    const resp = await this.sendRequest("tl/readFormAt", {
+    const resp = await this.sendRequest("tl/read", {
       textDocument: { uri },
       position,
       outer: outer ?? 0,
@@ -280,7 +280,7 @@ export class TypeLispLspClient {
     };
   }
 
-  async structuralMove(uri: string, name: string | undefined, position: { line: number; character: number } | undefined, direction?: string, destination?: string): Promise<{ success: boolean; text?: string; error?: string }> {
+  async move(uri: string, name: string | undefined, position: { line: number; character: number } | undefined, direction?: string, destination?: string): Promise<{ success: boolean; text?: string; error?: string }> {
     const params: any = {
       textDocument: { uri },
     };
@@ -289,7 +289,7 @@ export class TypeLispLspClient {
     if (destination) params.destination = destination;
     if (direction) params.direction = direction;
 
-    const resp = await this.sendRequest("tl/structuralMove", params);
+    const resp = await this.sendRequest("tl/move", params);
     return {
       success: resp.result?.success || false,
       text: resp.result?.text,
@@ -309,6 +309,42 @@ export class TypeLispLspClient {
     return {
       success: resp.result?.success || false,
       text: resp.result?.text,
+      error: resp.error?.message,
+    };
+  }
+
+  async expandMacro(uri: string, name: string): Promise<{ success: boolean; text?: string; error?: string }> {
+    const resp = await this.sendRequest("tl/expandMacro", {
+      textDocument: { uri },
+      name,
+    });
+    return {
+      success: resp.result?.success || false,
+      text: resp.result?.text,
+      error: resp.error?.message,
+    };
+  }
+
+  async getType(uri: string, position: { line: number; character: number }): Promise<{ success: boolean; type?: string; error?: string }> {
+    const resp = await this.sendRequest("tl/getType", {
+      textDocument: { uri },
+      position,
+    });
+    return {
+      success: resp.result?.success || false,
+      type: resp.result?.type,
+      error: resp.error?.message,
+    };
+  }
+
+  async findReferences(uri: string, name: string): Promise<{ success: boolean; references?: any[]; error?: string }> {
+    const resp = await this.sendRequest("tl/findReferences", {
+      textDocument: { uri },
+      name,
+    });
+    return {
+      success: resp.result?.success || false,
+      references: resp.result?.references,
       error: resp.error?.message,
     };
   }

@@ -101,7 +101,7 @@ export declare class TypeLispLspClient {
         form?: string;
         error?: string;
     }>;
-    structuralMove(uri: string, name: string | undefined, position: {
+    move(uri: string, name: string | undefined, position: {
         line: number;
         character: number;
     } | undefined, direction?: string, destination?: string): Promise<{
@@ -115,6 +115,24 @@ export declare class TypeLispLspClient {
     } | undefined, newName: string): Promise<{
         success: boolean;
         text?: string;
+        error?: string;
+    }>;
+    expandMacro(uri: string, name: string): Promise<{
+        success: boolean;
+        text?: string;
+        error?: string;
+    }>;
+    getType(uri: string, position: {
+        line: number;
+        character: number;
+    }): Promise<{
+        success: boolean;
+        type?: string;
+        error?: string;
+    }>;
+    findReferences(uri: string, name: string): Promise<{
+        success: boolean;
+        references?: any[];
         error?: string;
     }>;
 }

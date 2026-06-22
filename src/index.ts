@@ -384,7 +384,7 @@ export default defineToolPlugin({
       },
     }),
     tool({
-      name: "typelisp_edit_structural_move",
+      name: "typelisp_edit_move",
       label: "Move TypeLisp Form",
       description: "Move a top-level form by name or at a position. Pass either 'destination' (name of form to move after) or 'direction' ('up'/'down' for adjacent swap).",
       parameters: Type.Object({
@@ -410,9 +410,9 @@ export default defineToolPlugin({
         const text = readFile(file);
         await client.openDocument(uri, text);
 
-        const result = await client.structuralMove(uri, name, position, direction, destination);
+        const result = await client.move(uri, name, position, direction, destination);
         if (!result.success) {
-          return { success: false, error: result.error || "structuralMove failed" };
+          return { success: false, error: result.error || "move failed" };
         }
 
         if (dry_run) {
@@ -460,6 +460,75 @@ export default defineToolPlugin({
         writeFile(file, result.text!);
         const desc = position ? `at line ${position.line}, col ${position.character}` : `'${name}'`;
         return { success: true, message: `Renamed ${desc} to '${new_name}' in ${file}` };
+      },
+    }),
+
+    tool({
+      name: "typelisp_edit_expand_macro",
+      label: "Expand TypeLisp Macro",
+      description: "Get the text of a top-level form by name (macro expansion placeholder).",
+      parameters: Type.Object({
+        file: Type.String({ description: "Path to the .tl file." }),
+        name: Type.String({ description: "Name of the form to expand." }),
+      }),
+      execute: async ({ file, name }, config) => {
+        const client = await getClient(config.typelispPath, config.stdlibRoots);
+        const uri = makeUri(file);
+        const text = readFile(file);
+        await client.openDocument(uri, text);
+
+        const result = await client.expandMacro(uri, name);
+        if (!result.success) {
+          return { success: false, error: result.error || "expandMacro failed" };
+        }
+        return { success: true, form: result.text };
+      },
+    }),
+
+    tool({
+      name: "typelisp_edit_get_type",
+      label: "Get TypeLisp Type",
+      description: "Get the type of the expression at a cursor position.",
+      parameters: Type.Object({
+        file: Type.String({ description: "Path to the .tl file." }),
+        position: Type.Object({
+          line: Type.Number({ description: "0-indexed line number." }),
+          character: Type.Number({ description: "0-indexed character offset." }),
+        }),
+      }),
+      execute: async ({ file, position }, config) => {
+        const client = await getClient(config.typelispPath, config.stdlibRoots);
+        const uri = makeUri(file);
+        const text = readFile(file);
+        await client.openDocument(uri, text);
+
+        const result = await client.getType(uri, position);
+        if (!result.success) {
+          return { success: false, error: result.error || "getType failed" };
+        }
+        return { success: true, type: result.type };
+      },
+    }),
+
+    tool({
+      name: "typelisp_edit_find_references",
+      label: "Find TypeLisp References",
+      description: "Find all references to a name in a .tl file.",
+      parameters: Type.Object({
+        file: Type.String({ description: "Path to the .tl file." }),
+        name: Type.String({ description: "Name to find references for." }),
+      }),
+      execute: async ({ file, name }, config) => {
+        const client = await getClient(config.typelispPath, config.stdlibRoots);
+        const uri = makeUri(file);
+        const text = readFile(file);
+        await client.openDocument(uri, text);
+
+        const result = await client.findReferences(uri, name);
+        if (!result.success) {
+          return { success: false, error: result.error || "findReferences failed" };
+        }
+        return { success: true, references: result.references };
       },
     }),
   ],
