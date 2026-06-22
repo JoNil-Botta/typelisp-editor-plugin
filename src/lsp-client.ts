@@ -280,13 +280,14 @@ export class TypeLispLspClient {
     };
   }
 
-  async structuralMove(uri: string, name: string | undefined, position: { line: number; character: number } | undefined, direction: string): Promise<{ success: boolean; text?: string; error?: string }> {
+  async structuralMove(uri: string, name: string | undefined, position: { line: number; character: number } | undefined, direction?: string, destination?: string): Promise<{ success: boolean; text?: string; error?: string }> {
     const params: any = {
       textDocument: { uri },
-      direction,
     };
     if (name) params.name = name;
     if (position) params.position = position;
+    if (destination) params.destination = destination;
+    if (direction) params.direction = direction;
 
     const resp = await this.sendRequest("tl/structuralMove", params);
     return {

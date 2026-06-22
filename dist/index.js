@@ -344,7 +344,7 @@ export default defineToolPlugin({
         tool({
             name: "typelisp_edit_structural_move",
             label: "Move TypeLisp Form",
-            description: "Move a top-level form up or down by name or at a position.",
+            description: "Move a top-level form by name or at a position. Pass either 'destination' (name of form to move after) or 'direction' ('up'/'down' for adjacent swap).",
             parameters: Type.Object({
                 file: Type.String({ description: "Path to the .tl file to edit." }),
                 name: Type.Optional(Type.String({ description: "Name of the top-level form to move." })),
@@ -352,18 +352,22 @@ export default defineToolPlugin({
                     line: Type.Number({ description: "0-indexed line number." }),
                     character: Type.Number({ description: "0-indexed character offset." }),
                 }, { description: "Position-based move (alternative to name)." })),
-                direction: Type.String({ description: "Direction to move: 'up' or 'down'." }),
+                destination: Type.Optional(Type.String({ description: "Name of the form to move after (alternative to direction)." })),
+                direction: Type.Optional(Type.String({ description: "Direction to move: 'up' or 'down' (alternative to destination)." })),
                 dry_run: Type.Optional(Type.Boolean({ description: "Preview diff without writing." })),
             }),
-            execute: async ({ file, name, position, direction, dry_run }, config) => {
+            execute: async ({ file, name, position, destination, direction, dry_run }, config) => {
                 if (!name && !position) {
                     return { success: false, error: "Either 'name' or 'position' is required." };
+                }
+                if (!destination && !direction) {
+                    return { success: false, error: "Either 'destination' or 'direction' is required." };
                 }
                 const client = await getClient(config.typelispPath, config.stdlibRoots);
                 const uri = makeUri(file);
                 const text = readFile(file);
                 await client.openDocument(uri, text);
-                const result = await client.structuralMove(uri, name, position, direction);
+                const result = await client.structuralMove(uri, name, position, direction, destination);
                 if (!result.success) {
                     return { success: false, error: result.error || "structuralMove failed" };
                 }
@@ -372,7 +376,8 @@ export default defineToolPlugin({
                 }
                 writeFile(file, result.text);
                 const desc = position ? `at line ${position.line}, col ${position.character}` : `'${name}'`;
-                return { success: true, message: `Moved ${desc} ${direction} in ${file}` };
+                const moveDesc = destination ? `after '${destination}'` : `${direction}`;
+                return { success: true, message: `Moved ${desc} ${moveDesc} in ${file}` };
             },
         }),
         tool({

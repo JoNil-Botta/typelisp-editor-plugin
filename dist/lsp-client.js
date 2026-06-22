@@ -241,15 +241,18 @@ export class TypeLispLspClient {
             error: resp.error?.message,
         };
     }
-    async structuralMove(uri, name, position, direction) {
+    async structuralMove(uri, name, position, direction, destination) {
         const params = {
             textDocument: { uri },
-            direction,
         };
         if (name)
             params.name = name;
         if (position)
             params.position = position;
+        if (destination)
+            params.destination = destination;
+        if (direction)
+            params.direction = direction;
         const resp = await this.sendRequest("tl/structuralMove", params);
         return {
             success: resp.result?.success || false,

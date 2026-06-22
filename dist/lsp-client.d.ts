@@ -104,7 +104,7 @@ export declare class TypeLispLspClient {
     structuralMove(uri: string, name: string | undefined, position: {
         line: number;
         character: number;
-    } | undefined, direction: string): Promise<{
+    } | undefined, direction?: string, destination?: string): Promise<{
         success: boolean;
         text?: string;
         error?: string;
