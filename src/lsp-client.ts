@@ -268,6 +268,16 @@ export class TypeLispLspClient {
     };
   }
 
+  async check(uri: string): Promise<{ success: boolean; error?: string }> {
+    const resp = await this.sendRequest("tl/check", {
+      textDocument: { uri },
+    });
+    return {
+      success: resp.result?.success || false,
+      error: resp.error?.message,
+    };
+  }
+
   async findPosition(uri: string, name: string, kind?: string): Promise<{ line: number; character: number } | null> {
     const resp = await this.sendRequest("tl/findPosition", {
       textDocument: { uri },

@@ -79,6 +79,10 @@ export declare class TypeLispLspClient {
         text?: string;
         error?: string;
     }>;
+    check(uri: string): Promise<{
+        success: boolean;
+        error?: string;
+    }>;
     findPosition(uri: string, name: string, kind?: string): Promise<{
         line: number;
         character: number;

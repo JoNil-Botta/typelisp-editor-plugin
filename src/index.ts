@@ -74,9 +74,12 @@ export default defineToolPlugin({
         const text = readFile(file);
         await client.openDocument(uri, text);
 
-        const result = await client.format(uri);
+        const result = await client.check(uri);
         if (result.error) {
           return { success: false, error: result.error };
+        }
+        if (!result.success) {
+          return { success: false, error: result.error || "Typecheck failed" };
         }
         return { success: true, message: `${file}: OK` };
       },
