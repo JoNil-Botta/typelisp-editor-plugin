@@ -238,7 +238,7 @@ export class TypeLispLspClient {
         });
         return {
             success: resp.result?.success || false,
-            error: resp.error?.message,
+            error: resp.result?.error || resp.error?.message,
         };
     }
     async findPosition(uri, name, kind) {
@@ -349,7 +349,7 @@ export class TypeLispLspClient {
         return {
             success: resp.result?.success || false,
             type: resp.result?.type,
-            error: resp.error?.message,
+            error: resp.result?.error || resp.error?.message,
         };
     }
     async findReferences(uri, name) {
