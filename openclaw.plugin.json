@@ -26,13 +26,19 @@
     "tools": [
       "typelisp_edit_check",
       "typelisp_edit_list",
-      "typelisp_edit_insert_after",
       "typelisp_edit_append",
+      "typelisp_edit_insert_after",
       "typelisp_edit_replace",
       "typelisp_edit_replace_body",
       "typelisp_edit_replace_pattern",
       "typelisp_edit_delete",
-      "typelisp_edit_format"
+      "typelisp_edit_format",
+      "typelisp_edit_read",
+      "typelisp_edit_move",
+      "typelisp_edit_rename",
+      "typelisp_edit_expand_macro",
+      "typelisp_edit_get_type",
+      "typelisp_edit_find_references"
     ]
   }
 }

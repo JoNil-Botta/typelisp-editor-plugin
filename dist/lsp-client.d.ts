@@ -22,7 +22,7 @@ export declare class TypeLispLspClient {
     stop(): void;
     private processBuffer;
     sendRequest(method: string, params: any): Promise<JsonRpcMessage>;
-    openDocument(uri: string, text: string): Promise<JsonRpcMessage>;
+    openDocument(uri: string, text: string): Promise<void>;
     listFunctions(uri: string): Promise<string[]>;
     appendFunction(uri: string, newText: string): Promise<{
         success: boolean;
@@ -42,12 +42,18 @@ export declare class TypeLispLspClient {
         text?: string;
         error?: string;
     }>;
-    replacePattern(uri: string, name: string, oldPattern: string, newPattern: string): Promise<{
+    replacePattern(uri: string, name: string | undefined, oldPattern: string, newPattern: string, position?: {
+        line: number;
+        character: number;
+    }): Promise<{
         success: boolean;
         text?: string;
         error?: string;
     }>;
-    deleteFunction(uri: string, name: string): Promise<{
+    deleteFunction(uri: string, name: string | undefined, position?: {
+        line: number;
+        character: number;
+    }): Promise<{
         success: boolean;
         text?: string;
         error?: string;

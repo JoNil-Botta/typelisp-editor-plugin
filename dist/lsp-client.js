@@ -86,8 +86,17 @@ export class TypeLispLspClient {
         });
     }
     openDocument(uri, text) {
-        return this.sendRequest("textDocument/didOpen", {
-            textDocument: { uri, languageId: "typelisp", version: 1, text },
+        return new Promise((resolve) => {
+            const msg = {
+                jsonrpc: "2.0",
+                method: "textDocument/didOpen",
+                params: {
+                    textDocument: { uri, languageId: "typelisp", version: 1, text },
+                },
+            };
+            const content = JSON.stringify(msg);
+            const header = `Content-Length: ${Buffer.byteLength(content, "utf-8")}\r\n\r\n`;
+            this.process?.stdin?.write(header + content, () => resolve());
         });
     }
     // tl/ methods
@@ -95,6 +104,10 @@ export class TypeLispLspClient {
         const resp = await this.sendRequest("tl/listFunctions", {
             textDocument: { uri },
         });
+        // Server returns a plain array of strings, not { functions: [...] }
+        if (Array.isArray(resp.result)) {
+            return resp.result;
+        }
         return resp.result?.functions || [];
     }
     async appendFunction(uri, newText) {
@@ -113,10 +126,16 @@ export class TypeLispLspClient {
             textDocument: { uri },
             newText,
         };
-        if (name)
-            params.name = name;
-        if (position)
+        if (name && !position) {
+            const found = await this.findPosition(uri, name);
+            if (!found) {
+                return { success: false, error: `Form '${name}' not found` };
+            }
+            params.position = found;
+        }
+        else if (position) {
             params.position = position;
+        }
         const resp = await this.sendRequest("tl/replace", params);
         return {
             success: resp.result?.success || false,
@@ -136,24 +155,44 @@ export class TypeLispLspClient {
             error: resp.error?.message,
         };
     }
-    async replacePattern(uri, name, oldPattern, newPattern) {
-        const resp = await this.sendRequest("tl/replacePattern", {
+    async replacePattern(uri, name, oldPattern, newPattern, position) {
+        const params = {
             textDocument: { uri },
-            name,
             oldPattern,
             newPattern,
-        });
+        };
+        if (name && !position) {
+            const found = await this.findPosition(uri, name);
+            if (!found) {
+                return { success: false, error: `Form '${name}' not found` };
+            }
+            params.position = found;
+        }
+        else if (position) {
+            params.position = position;
+        }
+        const resp = await this.sendRequest("tl/replacePattern", params);
         return {
             success: resp.result?.success || false,
             text: resp.result?.text,
             error: resp.error?.message,
         };
     }
-    async deleteFunction(uri, name) {
-        const resp = await this.sendRequest("tl/deleteFunction", {
+    async deleteFunction(uri, name, position) {
+        const params = {
             textDocument: { uri },
-            name,
-        });
+        };
+        if (name && !position) {
+            const found = await this.findPosition(uri, name);
+            if (!found) {
+                return { success: false, error: `Form '${name}' not found` };
+            }
+            params.position = found;
+        }
+        else if (position) {
+            params.position = position;
+        }
+        const resp = await this.sendRequest("tl/delete", params);
         return {
             success: resp.result?.success || false,
             text: resp.result?.text,
@@ -161,12 +200,12 @@ export class TypeLispLspClient {
         };
     }
     async format(uri) {
-        const resp = await this.sendRequest("tl/format", {
+        const resp = await this.sendRequest("textDocument/formatting", {
             textDocument: { uri },
         });
         return {
-            success: resp.result?.success || false,
-            text: resp.result?.text,
+            success: resp.result !== undefined && resp.result !== null,
+            text: resp.result?.[0]?.newText,
             error: resp.error?.message,
         };
     }
@@ -245,10 +284,16 @@ export class TypeLispLspClient {
         const params = {
             textDocument: { uri },
         };
-        if (name)
-            params.name = name;
-        if (position)
+        if (name && !position) {
+            const found = await this.findPosition(uri, name);
+            if (!found) {
+                return { success: false, error: `Form '${name}' not found` };
+            }
+            params.position = found;
+        }
+        else if (position) {
             params.position = position;
+        }
         if (destination)
             params.destination = destination;
         if (direction)
