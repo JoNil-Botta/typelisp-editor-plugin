@@ -1,4 +1,5 @@
 import { spawn } from "child_process";
+import * as fs from "fs";
 export class TypeLispLspClient {
     typelispPath;
     stdlibRoots;
@@ -100,6 +101,21 @@ export class TypeLispLspClient {
         });
     }
     // tl/ methods
+    // findPosition returns the position of the name identifier, but mutation
+    // methods need the position of the start of the form ('(' on the line).
+    async adjustToFormStart(uri, pos) {
+        const filePath = uri.replace(/^file:\/\//, "");
+        const content = fs.readFileSync(filePath, "utf-8");
+        const lines = content.split("\n");
+        if (pos.line >= lines.length)
+            return pos;
+        const line = lines[pos.line];
+        for (let i = 0; i < pos.character && i < line.length; i++) {
+            if (line[i] === "(")
+                return { line: pos.line, character: i };
+        }
+        return { line: pos.line, character: 1 };
+    }
     async listFunctions(uri) {
         const resp = await this.sendRequest("tl/listFunctions", {
             textDocument: { uri },
@@ -131,7 +147,7 @@ export class TypeLispLspClient {
             if (!found) {
                 return { success: false, error: `Form '${name}' not found` };
             }
-            params.position = found;
+            params.position = await this.adjustToFormStart(uri, found);
         }
         else if (position) {
             params.position = position;
@@ -166,7 +182,7 @@ export class TypeLispLspClient {
             if (!found) {
                 return { success: false, error: `Form '${name}' not found` };
             }
-            params.position = found;
+            params.position = await this.adjustToFormStart(uri, found);
         }
         else if (position) {
             params.position = position;
@@ -187,7 +203,7 @@ export class TypeLispLspClient {
             if (!found) {
                 return { success: false, error: `Form '${name}' not found` };
             }
-            params.position = found;
+            params.position = await this.adjustToFormStart(uri, found);
         }
         else if (position) {
             params.position = position;
@@ -298,7 +314,7 @@ export class TypeLispLspClient {
             if (!found) {
                 return { success: false, error: `Form '${name}' not found` };
             }
-            params.position = found;
+            params.position = await this.adjustToFormStart(uri, found);
         }
         else if (position) {
             params.position = position;

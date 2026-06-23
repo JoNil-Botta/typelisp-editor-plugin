@@ -156,7 +156,20 @@ export default defineToolPlugin({
           if (!found) {
             return { success: false, error: `Form '${name}' not found${kind ? ` (kind: ${kind})` : ""}` };
           }
-          pos = found;
+          // Adjust to form start so insertAfter inserts as sibling, not inside body
+          const filePath = uri.replace(/^file:\/\//, "");
+          const content = readFile(filePath);
+          const lines = content.split("\n");
+          if (found.line < lines.length) {
+            const line = lines[found.line];
+            for (let i = 0; i < found.character && i < line.length; i++) {
+              if (line[i] === "(") {
+                pos = { line: found.line, character: i };
+                break;
+              }
+            }
+          }
+          if (!pos) pos = { line: found.line, character: 1 };
         }
         if (!pos) {
           return { success: false, error: "Either 'name' or 'position' is required." };

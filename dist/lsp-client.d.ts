@@ -23,6 +23,7 @@ export declare class TypeLispLspClient {
     private processBuffer;
     sendRequest(method: string, params: any): Promise<JsonRpcMessage>;
     openDocument(uri: string, text: string): Promise<void>;
+    private adjustToFormStart;
     listFunctions(uri: string): Promise<string[]>;
     appendFunction(uri: string, newText: string): Promise<{
         success: boolean;
