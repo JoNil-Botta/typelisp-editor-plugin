@@ -178,6 +178,18 @@ export class TypeLispLspClient {
             error: resp.error?.message,
         };
     }
+    async patch(uri, oldText, newText) {
+        const resp = await this.sendRequest("tl/patch", {
+            textDocument: { uri },
+            oldText,
+            newText,
+        });
+        return {
+            success: resp.result?.success || false,
+            text: resp.result?.text,
+            error: resp.error?.message,
+        };
+    }
     async deleteFunction(uri, name, position) {
         const params = {
             textDocument: { uri },

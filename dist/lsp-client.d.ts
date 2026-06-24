@@ -50,6 +50,11 @@ export declare class TypeLispLspClient {
         text?: string;
         error?: string;
     }>;
+    patch(uri: string, oldText: string, newText: string): Promise<{
+        success: boolean;
+        text?: string;
+        error?: string;
+    }>;
     deleteFunction(uri: string, name: string | undefined, position?: {
         line: number;
         character: number;

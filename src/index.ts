@@ -215,6 +215,36 @@ export default defineToolPlugin({
     }),
 
     tool({
+      name: "typelisp_edit_patch",
+      label: "Patch TypeLisp File",
+      description: "Find and replace text anywhere in a .tl file, with form validation.",
+      parameters: Type.Object({
+        file: Type.String({ description: "Path to the .tl file to edit." }),
+        oldText: Type.String({ description: "Exact text to find (must be unique)." }),
+        newText: Type.String({ description: "Replacement text." }),
+        dry_run: Type.Optional(Type.Boolean({ description: "Preview diff without writing." })),
+      }),
+      execute: async ({ file, oldText, newText, dry_run }, config) => {
+        const client = await getClient(config.typelispPath, config.stdlibRoots);
+        const uri = makeUri(file);
+        const text = readFile(file);
+        await client.openDocument(uri, text);
+
+        const result = await client.patch(uri, oldText, newText);
+        if (!result.success) {
+          return { success: false, error: result.error || "patch failed" };
+        }
+
+        if (dry_run) {
+          return { success: true, dryRun: true, diff: { old: text, new: result.text } };
+        }
+
+        writeFile(file, result.text!);
+        return { success: true, message: `Patched ${file}` };
+      },
+    }),
+
+    tool({
       name: "typelisp_edit_replace_body",
       label: "Replace TypeLisp Function Body",
       description: "Replace the body of a function by name or at a position.",
