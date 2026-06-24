@@ -38,7 +38,8 @@
       "typelisp_edit_rename",
       "typelisp_edit_expand_macro",
       "typelisp_edit_get_type",
-      "typelisp_edit_find_references"
+      "typelisp_edit_find_references",
+      "typelisp_edit_patch"
     ]
   }
 }

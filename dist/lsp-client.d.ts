@@ -1,3 +1,4 @@
+import { ChildProcess } from "child_process";
 interface JsonRpcMessage {
     jsonrpc: "2.0";
     id?: number;
@@ -17,12 +18,15 @@ export declare class TypeLispLspClient {
     private pending;
     private buffer;
     private running;
+    private timeoutMs;
     constructor(typelispPath: string, stdlibRoots?: string[]);
+    getProcess(): ChildProcess | null;
     start(): Promise<void>;
     stop(): void;
     private processBuffer;
     sendRequest(method: string, params: any): Promise<JsonRpcMessage>;
     openDocument(uri: string, text: string): Promise<void>;
+    closeDocument(uri: string): Promise<void>;
     listFunctions(uri: string): Promise<string[]>;
     appendFunction(uri: string, newText: string): Promise<{
         success: boolean;

@@ -7,9 +7,13 @@ export class TypeLispLspClient {
     pending = new Map();
     buffer = "";
     running = false;
+    timeoutMs = 5000; // 5 second request timeout
     constructor(typelispPath, stdlibRoots = []) {
         this.typelispPath = typelispPath;
         this.stdlibRoots = stdlibRoots;
+    }
+    getProcess() {
+        return this.process;
     }
     start() {
         return new Promise((resolve, reject) => {
@@ -29,12 +33,24 @@ export class TypeLispLspClient {
                 // LSP servers log diagnostics to stderr, ignore
             });
             this.process.on("error", reject);
-            // Send initialize
+            this.process.on("exit", () => {
+                this.running = false;
+            });
+            // Send initialize with timeout
+            const initTimeout = setTimeout(() => {
+                reject(new Error("LSP initialize timeout after 10s"));
+            }, 10000);
             this.sendRequest("initialize", {
                 processId: process.pid,
                 rootUri: null,
                 capabilities: {},
-            }).then(() => resolve()).catch(reject);
+            }).then(() => {
+                clearTimeout(initTimeout);
+                resolve();
+            }).catch((err) => {
+                clearTimeout(initTimeout);
+                reject(err);
+            });
         });
     }
     stop() {
@@ -70,10 +86,18 @@ export class TypeLispLspClient {
         }
     }
     sendRequest(method, params) {
-        return new Promise((resolve) => {
+        return new Promise((resolve, reject) => {
+            if (!this.process || !this.running) {
+                reject(new Error("LSP client is not running"));
+                return;
+            }
             this.requestId++;
             const id = this.requestId;
             this.pending.set(id, resolve);
+            const timeout = setTimeout(() => {
+                this.pending.delete(id);
+                reject(new Error(`LSP request '${method}' timeout after ${this.timeoutMs}ms`));
+            }, this.timeoutMs);
             const msg = {
                 jsonrpc: "2.0",
                 id,
@@ -82,11 +106,28 @@ export class TypeLispLspClient {
             };
             const content = JSON.stringify(msg);
             const header = `Content-Length: ${Buffer.byteLength(content, "utf-8")}\r\n\r\n`;
-            this.process?.stdin?.write(header + content);
+            try {
+                this.process.stdin?.write(header + content, (err) => {
+                    if (err) {
+                        clearTimeout(timeout);
+                        this.pending.delete(id);
+                        reject(err);
+                    }
+                });
+            }
+            catch (err) {
+                clearTimeout(timeout);
+                this.pending.delete(id);
+                reject(err);
+            }
         });
     }
     openDocument(uri, text) {
-        return new Promise((resolve) => {
+        return new Promise((resolve, reject) => {
+            if (!this.process || !this.running) {
+                reject(new Error("LSP client is not running"));
+                return;
+            }
             const msg = {
                 jsonrpc: "2.0",
                 method: "textDocument/didOpen",
@@ -96,7 +137,49 @@ export class TypeLispLspClient {
             };
             const content = JSON.stringify(msg);
             const header = `Content-Length: ${Buffer.byteLength(content, "utf-8")}\r\n\r\n`;
-            this.process?.stdin?.write(header + content, () => resolve());
+            try {
+                this.process.stdin?.write(header + content, (err) => {
+                    if (err) {
+                        reject(err);
+                    }
+                    else {
+                        resolve();
+                    }
+                });
+            }
+            catch (err) {
+                reject(err);
+            }
+        });
+    }
+    closeDocument(uri) {
+        return new Promise((resolve, reject) => {
+            if (!this.process || !this.running) {
+                resolve();
+                return;
+            }
+            const msg = {
+                jsonrpc: "2.0",
+                method: "textDocument/didClose",
+                params: {
+                    textDocument: { uri },
+                },
+            };
+            const content = JSON.stringify(msg);
+            const header = `Content-Length: ${Buffer.byteLength(content, "utf-8")}\r\n\r\n`;
+            try {
+                this.process.stdin?.write(header + content, (err) => {
+                    if (err) {
+                        reject(err);
+                    }
+                    else {
+                        resolve();
+                    }
+                });
+            }
+            catch (err) {
+                reject(err);
+            }
         });
     }
     // tl/ methods

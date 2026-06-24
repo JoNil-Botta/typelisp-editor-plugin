@@ -6,15 +6,47 @@ import * as path from "path";
 // Global client cache to avoid restarting server for every tool call
 let globalClient = null;
 let globalClientPromise = null;
+function isProcessAlive(proc) {
+    if (!proc)
+        return false;
+    if (proc.killed)
+        return false;
+    if (proc.exitCode !== null)
+        return false;
+    if (proc.signalCode !== null)
+        return false;
+    return true;
+}
 async function getClient(typelispPath, stdlibRoots) {
     if (globalClient && globalClientPromise) {
-        return globalClient;
+        if (isProcessAlive(globalClient.getProcess())) {
+            // Health check: try a quick ping to verify server is responsive
+            try {
+                await Promise.race([
+                    globalClient.listFunctions("file:///health-check.tl"),
+                    new Promise((_, reject) => setTimeout(() => reject(new Error("Health check timeout")), 2000)),
+                ]);
+                return globalClient;
+            }
+            catch {
+                console.warn("TypeLisp LSP client health check failed, restarting server");
+                try {
+                    globalClient.stop();
+                }
+                catch (_) { }
+                globalClient = null;
+                globalClientPromise = null;
+            }
+        }
+        else {
+            globalClient = null;
+            globalClientPromise = null;
+        }
     }
     const tlPath = typelispPath || findTypelisp();
     const roots = stdlibRoots || ["."];
     globalClient = new TypeLispLspClient(tlPath, roots);
     globalClientPromise = globalClient.start().then(() => globalClient);
-    // Keep server alive for the process lifetime
     process.on("exit", () => globalClient?.stop());
     return globalClientPromise;
 }
@@ -42,6 +74,22 @@ function writeFile(filePath, text) {
     fs.writeFileSync(tmp, text, "utf-8");
     fs.renameSync(tmp, filePath);
 }
+// Helper: open document, execute operation, then close to prevent memory leaks
+async function withDocument(client, uri, text, operation) {
+    await client.openDocument(uri, text);
+    try {
+        const result = await operation();
+        return result;
+    }
+    finally {
+        try {
+            await client.closeDocument(uri);
+        }
+        catch (_) {
+            // Ignore close errors
+        }
+    }
+}
 export default defineToolPlugin({
     id: "typelisp-editor",
     name: "TypeLisp Editor",
@@ -62,8 +110,7 @@ export default defineToolPlugin({
                 const client = await getClient(config.typelispPath, config.stdlibRoots);
                 const uri = makeUri(file);
                 const text = readFile(file);
-                await client.openDocument(uri, text);
-                const result = await client.check(uri);
+                const result = await withDocument(client, uri, text, () => client.check(uri));
                 if (result.error) {
                     return { success: false, error: result.error };
                 }
@@ -84,8 +131,7 @@ export default defineToolPlugin({
                 const client = await getClient(config.typelispPath, config.stdlibRoots);
                 const uri = makeUri(file);
                 const text = readFile(file);
-                await client.openDocument(uri, text);
-                const functions = await client.listFunctions(uri);
+                const functions = await withDocument(client, uri, text, () => client.listFunctions(uri));
                 return { functions };
             },
         }),
@@ -102,8 +148,7 @@ export default defineToolPlugin({
                 const client = await getClient(config.typelispPath, config.stdlibRoots);
                 const uri = makeUri(file);
                 const text = readFile(file);
-                await client.openDocument(uri, text);
-                const result = await client.appendFunction(uri, form);
+                const result = await withDocument(client, uri, text, () => client.appendFunction(uri, form));
                 if (!result.success) {
                     return { success: false, error: result.error || "appendFunction failed" };
                 }
@@ -130,19 +175,20 @@ export default defineToolPlugin({
                 const client = await getClient(config.typelispPath, config.stdlibRoots);
                 const uri = makeUri(file);
                 const text = readFile(file);
-                client.openDocument(uri, text);
-                let pos = position;
-                if (name && !pos) {
-                    const found = await client.findPosition(uri, name, kind);
-                    if (!found) {
-                        return { success: false, error: `Form '${name}' not found${kind ? ` (kind: ${kind})` : ""}` };
+                const result = await withDocument(client, uri, text, async () => {
+                    let pos = position;
+                    if (name && !pos) {
+                        const found = await client.findPosition(uri, name, kind);
+                        if (!found) {
+                            return { success: false, error: `Form '${name}' not found${kind ? ` (kind: ${kind})` : ""}` };
+                        }
+                        pos = found;
                     }
-                    pos = found;
-                }
-                if (!pos) {
-                    return { success: false, error: "Either 'name' or 'position' is required." };
-                }
-                const result = await client.insertAfter(uri, pos, new_form);
+                    if (!pos) {
+                        return { success: false, error: "Either 'name' or 'position' is required." };
+                    }
+                    return client.insertAfter(uri, pos, new_form);
+                });
                 if (!result.success) {
                     return { success: false, error: result.error || "insertAfter failed" };
                 }
@@ -150,7 +196,7 @@ export default defineToolPlugin({
                     return { success: true, dryRun: true, diff: { old: text, new: result.text } };
                 }
                 writeFile(file, result.text);
-                const desc = name ? `after '${name}'` : `after position (${pos.line}, ${pos.character})`;
+                const desc = name ? `after '${name}'` : `after position (${position?.line ?? 0}, ${position?.character ?? 0})`;
                 return { success: true, message: `Inserted form ${desc} in ${file}` };
             },
         }),
@@ -175,8 +221,7 @@ export default defineToolPlugin({
                 const client = await getClient(config.typelispPath, config.stdlibRoots);
                 const uri = makeUri(file);
                 const text = readFile(file);
-                await client.openDocument(uri, text);
-                const result = await client.replaceFunction(uri, name, new_form, position);
+                const result = await withDocument(client, uri, text, () => client.replaceFunction(uri, name, new_form, position));
                 if (!result.success) {
                     return { success: false, error: result.error || "replaceFunction failed" };
                 }
@@ -202,8 +247,7 @@ export default defineToolPlugin({
                 const client = await getClient(config.typelispPath, config.stdlibRoots);
                 const uri = makeUri(file);
                 const text = readFile(file);
-                await client.openDocument(uri, text);
-                const result = await client.patch(uri, oldText, newText);
+                const result = await withDocument(client, uri, text, () => client.patch(uri, oldText, newText));
                 if (!result.success) {
                     return { success: false, error: result.error || "patch failed" };
                 }
@@ -235,10 +279,9 @@ export default defineToolPlugin({
                 const client = await getClient(config.typelispPath, config.stdlibRoots);
                 const uri = makeUri(file);
                 const text = readFile(file);
-                await client.openDocument(uri, text);
-                const result = name
-                    ? await client.replaceBody(uri, name, new_body)
-                    : await client.replaceBodyAt(uri, position, new_body);
+                const result = await withDocument(client, uri, text, () => name
+                    ? client.replaceBody(uri, name, new_body)
+                    : client.replaceBodyAt(uri, position, new_body));
                 if (!result.success) {
                     return { success: false, error: result.error || "replaceBody failed" };
                 }
@@ -272,10 +315,9 @@ export default defineToolPlugin({
                 const client = await getClient(config.typelispPath, config.stdlibRoots);
                 const uri = makeUri(file);
                 const text = readFile(file);
-                await client.openDocument(uri, text);
-                const result = name
-                    ? await client.replacePattern(uri, name, old_pattern, new_pattern)
-                    : await client.replacePatternAt(uri, position, old_pattern, new_pattern);
+                const result = await withDocument(client, uri, text, () => name
+                    ? client.replacePattern(uri, name, old_pattern, new_pattern)
+                    : client.replacePatternAt(uri, position, old_pattern, new_pattern));
                 if (!result.success) {
                     return { success: false, error: result.error || "replacePattern failed" };
                 }
@@ -307,10 +349,9 @@ export default defineToolPlugin({
                 const client = await getClient(config.typelispPath, config.stdlibRoots);
                 const uri = makeUri(file);
                 const text = readFile(file);
-                await client.openDocument(uri, text);
-                const result = name
-                    ? await client.deleteFunction(uri, name)
-                    : await client.deleteFunctionAt(uri, position);
+                const result = await withDocument(client, uri, text, () => name
+                    ? client.deleteFunction(uri, name)
+                    : client.deleteFunctionAt(uri, position));
                 if (!result.success) {
                     return { success: false, error: result.error || "deleteFunction failed" };
                 }
@@ -334,8 +375,7 @@ export default defineToolPlugin({
                 const client = await getClient(config.typelispPath, config.stdlibRoots);
                 const uri = makeUri(file);
                 const text = readFile(file);
-                await client.openDocument(uri, text);
-                const result = await client.format(uri);
+                const result = await withDocument(client, uri, text, () => client.format(uri));
                 if (!result.success) {
                     return { success: false, error: result.error || "format failed" };
                 }
@@ -362,8 +402,7 @@ export default defineToolPlugin({
                 const client = await getClient(config.typelispPath, config.stdlibRoots);
                 const uri = makeUri(file);
                 const text = readFile(file);
-                await client.openDocument(uri, text);
-                const result = await client.readFormAt(uri, position, outer ?? 0);
+                const result = await withDocument(client, uri, text, () => client.readFormAt(uri, position, outer ?? 0));
                 if (!result.success) {
                     return { success: false, error: result.error || "readFormAt failed" };
                 }
@@ -395,8 +434,7 @@ export default defineToolPlugin({
                 const client = await getClient(config.typelispPath, config.stdlibRoots);
                 const uri = makeUri(file);
                 const text = readFile(file);
-                await client.openDocument(uri, text);
-                const result = await client.move(uri, name, position, direction, destination);
+                const result = await withDocument(client, uri, text, () => client.move(uri, name, position, direction, destination));
                 if (!result.success) {
                     return { success: false, error: result.error || "move failed" };
                 }
@@ -430,8 +468,7 @@ export default defineToolPlugin({
                 const client = await getClient(config.typelispPath, config.stdlibRoots);
                 const uri = makeUri(file);
                 const text = readFile(file);
-                await client.openDocument(uri, text);
-                const result = await client.rename(uri, name, position, new_name);
+                const result = await withDocument(client, uri, text, () => client.rename(uri, name, position, new_name));
                 if (!result.success) {
                     return { success: false, error: result.error || "rename failed" };
                 }
@@ -455,8 +492,7 @@ export default defineToolPlugin({
                 const client = await getClient(config.typelispPath, config.stdlibRoots);
                 const uri = makeUri(file);
                 const text = readFile(file);
-                await client.openDocument(uri, text);
-                const result = await client.expandMacro(uri, name);
+                const result = await withDocument(client, uri, text, () => client.expandMacro(uri, name));
                 if (!result.success) {
                     return { success: false, error: result.error || "expandMacro failed" };
                 }
@@ -478,8 +514,7 @@ export default defineToolPlugin({
                 const client = await getClient(config.typelispPath, config.stdlibRoots);
                 const uri = makeUri(file);
                 const text = readFile(file);
-                await client.openDocument(uri, text);
-                const result = await client.getType(uri, position);
+                const result = await withDocument(client, uri, text, () => client.getType(uri, position));
                 if (!result.success) {
                     return { success: false, error: result.error || "getType failed" };
                 }
@@ -498,8 +533,7 @@ export default defineToolPlugin({
                 const client = await getClient(config.typelispPath, config.stdlibRoots);
                 const uri = makeUri(file);
                 const text = readFile(file);
-                await client.openDocument(uri, text);
-                const result = await client.findReferences(uri, name);
+                const result = await withDocument(client, uri, text, () => client.findReferences(uri, name));
                 if (!result.success) {
                     return { success: false, error: result.error || "findReferences failed" };
                 }
