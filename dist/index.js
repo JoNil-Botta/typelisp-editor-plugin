@@ -17,25 +17,49 @@ function isProcessAlive(proc) {
         return false;
     return true;
 }
+function getMemoryKB(pid) {
+    try {
+        const status = fs.readFileSync(`/proc/${pid}/status`, "utf-8");
+        const vmRss = status.match(/VmRSS:\\s*(\\d+)/);
+        return vmRss ? parseInt(vmRss[1]) : 0;
+    }
+    catch {
+        return 0;
+    }
+}
+const MEMORY_THRESHOLD_KB = 800 * 1024; // 800 MB
 async function getClient(typelispPath, stdlibRoots, filePath) {
     if (globalClient && globalClientPromise) {
         if (isProcessAlive(globalClient.getProcess())) {
-            // Health check: try a quick ping to verify server is responsive
-            try {
-                await Promise.race([
-                    globalClient.listFunctions("file:///health-check.tl"),
-                    new Promise((_, reject) => setTimeout(() => reject(new Error("Health check timeout")), 2000)),
-                ]);
-                return globalClient;
-            }
-            catch {
-                console.warn("TypeLisp LSP client health check failed, restarting server");
+            const pid = globalClient.getProcess()?.pid;
+            const memKB = pid ? getMemoryKB(pid) : 0;
+            if (memKB > MEMORY_THRESHOLD_KB) {
+                console.warn(`TypeLisp LSP memory (${(memKB / 1024).toFixed(0)} MB) exceeds threshold, restarting server`);
                 try {
                     globalClient.stop();
                 }
                 catch (_) { }
                 globalClient = null;
                 globalClientPromise = null;
+            }
+            else {
+                // Health check: try a quick ping to verify server is responsive
+                try {
+                    await Promise.race([
+                        globalClient.listFunctions("file:///health-check.tl"),
+                        new Promise((_, reject) => setTimeout(() => reject(new Error("Health check timeout")), 2000)),
+                    ]);
+                    return globalClient;
+                }
+                catch {
+                    console.warn("TypeLisp LSP client health check failed, restarting server");
+                    try {
+                        globalClient.stop();
+                    }
+                    catch (_) { }
+                    globalClient = null;
+                    globalClientPromise = null;
+                }
             }
         }
         else {
