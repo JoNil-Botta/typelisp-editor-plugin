@@ -7,7 +7,7 @@ export class TypeLispLspClient {
     pending = new Map();
     buffer = "";
     running = false;
-    timeoutMs = 5000; // 5 second request timeout
+    timeoutMs = 30000; // 30 second request timeout
     constructor(typelispPath, stdlibRoots = []) {
         this.typelispPath = typelispPath;
         this.stdlibRoots = stdlibRoots;

@@ -17,7 +17,7 @@ function isProcessAlive(proc) {
         return false;
     return true;
 }
-async function getClient(typelispPath, stdlibRoots) {
+async function getClient(typelispPath, stdlibRoots, filePath) {
     if (globalClient && globalClientPromise) {
         if (isProcessAlive(globalClient.getProcess())) {
             // Health check: try a quick ping to verify server is responsive
@@ -44,8 +44,15 @@ async function getClient(typelispPath, stdlibRoots) {
         }
     }
     const tlPath = typelispPath || findTypelisp();
-    const roots = stdlibRoots || ["."];
-    globalClient = new TypeLispLspClient(tlPath, roots);
+    // Resolve stdlib roots: if a file is provided, include its directory
+    const roots = new Set();
+    for (const r of (stdlibRoots || ["."])) {
+        roots.add(path.resolve(r));
+    }
+    if (filePath) {
+        roots.add(path.dirname(path.resolve(filePath)));
+    }
+    globalClient = new TypeLispLspClient(tlPath, Array.from(roots));
     globalClientPromise = globalClient.start().then(() => globalClient);
     process.on("exit", () => globalClient?.stop());
     return globalClientPromise;
@@ -107,7 +114,7 @@ export default defineToolPlugin({
                 file: Type.String({ description: "Path to the .tl file to check." }),
             }),
             execute: async ({ file }, config) => {
-                const client = await getClient(config.typelispPath, config.stdlibRoots);
+                const client = await getClient(config.typelispPath, config.stdlibRoots, file);
                 const uri = makeUri(file);
                 const text = readFile(file);
                 const result = await withDocument(client, uri, text, () => client.check(uri));
@@ -128,7 +135,7 @@ export default defineToolPlugin({
                 file: Type.String({ description: "Path to the .tl file." }),
             }),
             execute: async ({ file }, config) => {
-                const client = await getClient(config.typelispPath, config.stdlibRoots);
+                const client = await getClient(config.typelispPath, config.stdlibRoots, file);
                 const uri = makeUri(file);
                 const text = readFile(file);
                 const functions = await withDocument(client, uri, text, () => client.listFunctions(uri));
@@ -145,7 +152,7 @@ export default defineToolPlugin({
                 dry_run: Type.Optional(Type.Boolean({ description: "Preview diff without writing." })),
             }),
             execute: async ({ file, form, dry_run }, config) => {
-                const client = await getClient(config.typelispPath, config.stdlibRoots);
+                const client = await getClient(config.typelispPath, config.stdlibRoots, file);
                 const uri = makeUri(file);
                 const text = readFile(file);
                 const result = await withDocument(client, uri, text, () => client.appendFunction(uri, form));
@@ -172,7 +179,7 @@ export default defineToolPlugin({
                 dry_run: Type.Optional(Type.Boolean({ description: "Preview diff without writing." })),
             }),
             execute: async ({ file, name, position, kind, new_form, dry_run }, config) => {
-                const client = await getClient(config.typelispPath, config.stdlibRoots);
+                const client = await getClient(config.typelispPath, config.stdlibRoots, file);
                 const uri = makeUri(file);
                 const text = readFile(file);
                 const result = await withDocument(client, uri, text, async () => {
@@ -218,7 +225,7 @@ export default defineToolPlugin({
                 if (!name && !position) {
                     return { success: false, error: "Either 'name' or 'position' is required." };
                 }
-                const client = await getClient(config.typelispPath, config.stdlibRoots);
+                const client = await getClient(config.typelispPath, config.stdlibRoots, file);
                 const uri = makeUri(file);
                 const text = readFile(file);
                 const result = await withDocument(client, uri, text, () => client.replaceFunction(uri, name, new_form, position));
@@ -244,7 +251,7 @@ export default defineToolPlugin({
                 dry_run: Type.Optional(Type.Boolean({ description: "Preview diff without writing." })),
             }),
             execute: async ({ file, oldText, newText, dry_run }, config) => {
-                const client = await getClient(config.typelispPath, config.stdlibRoots);
+                const client = await getClient(config.typelispPath, config.stdlibRoots, file);
                 const uri = makeUri(file);
                 const text = readFile(file);
                 const result = await withDocument(client, uri, text, () => client.patch(uri, oldText, newText));
@@ -276,7 +283,7 @@ export default defineToolPlugin({
                 if (!name && !position) {
                     return { success: false, error: "Either 'name' or 'position' is required." };
                 }
-                const client = await getClient(config.typelispPath, config.stdlibRoots);
+                const client = await getClient(config.typelispPath, config.stdlibRoots, file);
                 const uri = makeUri(file);
                 const text = readFile(file);
                 const result = await withDocument(client, uri, text, () => name
@@ -312,7 +319,7 @@ export default defineToolPlugin({
                 if (!name && !position) {
                     return { success: false, error: "Either 'name' or 'position' is required." };
                 }
-                const client = await getClient(config.typelispPath, config.stdlibRoots);
+                const client = await getClient(config.typelispPath, config.stdlibRoots, file);
                 const uri = makeUri(file);
                 const text = readFile(file);
                 const result = await withDocument(client, uri, text, () => name
@@ -346,7 +353,7 @@ export default defineToolPlugin({
                 if (!name && !position) {
                     return { success: false, error: "Either 'name' or 'position' is required." };
                 }
-                const client = await getClient(config.typelispPath, config.stdlibRoots);
+                const client = await getClient(config.typelispPath, config.stdlibRoots, file);
                 const uri = makeUri(file);
                 const text = readFile(file);
                 const result = await withDocument(client, uri, text, () => name
@@ -372,7 +379,7 @@ export default defineToolPlugin({
                 dry_run: Type.Optional(Type.Boolean({ description: "Preview diff without writing." })),
             }),
             execute: async ({ file, dry_run }, config) => {
-                const client = await getClient(config.typelispPath, config.stdlibRoots);
+                const client = await getClient(config.typelispPath, config.stdlibRoots, file);
                 const uri = makeUri(file);
                 const text = readFile(file);
                 const result = await withDocument(client, uri, text, () => client.format(uri));
@@ -399,7 +406,7 @@ export default defineToolPlugin({
                 outer: Type.Optional(Type.Number({ description: "How many levels outward to go (0 = innermost form, 1 = enclosing form, etc.)." })),
             }),
             execute: async ({ file, position, outer }, config) => {
-                const client = await getClient(config.typelispPath, config.stdlibRoots);
+                const client = await getClient(config.typelispPath, config.stdlibRoots, file);
                 const uri = makeUri(file);
                 const text = readFile(file);
                 const result = await withDocument(client, uri, text, () => client.readFormAt(uri, position, outer ?? 0));
@@ -431,7 +438,7 @@ export default defineToolPlugin({
                 if (!destination && !direction) {
                     return { success: false, error: "Either 'destination' or 'direction' is required." };
                 }
-                const client = await getClient(config.typelispPath, config.stdlibRoots);
+                const client = await getClient(config.typelispPath, config.stdlibRoots, file);
                 const uri = makeUri(file);
                 const text = readFile(file);
                 const result = await withDocument(client, uri, text, () => client.move(uri, name, position, direction, destination));
@@ -465,7 +472,7 @@ export default defineToolPlugin({
                 if (!name && !position) {
                     return { success: false, error: "Either 'name' or 'position' is required." };
                 }
-                const client = await getClient(config.typelispPath, config.stdlibRoots);
+                const client = await getClient(config.typelispPath, config.stdlibRoots, file);
                 const uri = makeUri(file);
                 const text = readFile(file);
                 const result = await withDocument(client, uri, text, () => client.rename(uri, name, position, new_name));
@@ -489,7 +496,7 @@ export default defineToolPlugin({
                 name: Type.String({ description: "Name of the form to expand." }),
             }),
             execute: async ({ file, name }, config) => {
-                const client = await getClient(config.typelispPath, config.stdlibRoots);
+                const client = await getClient(config.typelispPath, config.stdlibRoots, file);
                 const uri = makeUri(file);
                 const text = readFile(file);
                 const result = await withDocument(client, uri, text, () => client.expandMacro(uri, name));
@@ -511,7 +518,7 @@ export default defineToolPlugin({
                 }),
             }),
             execute: async ({ file, position }, config) => {
-                const client = await getClient(config.typelispPath, config.stdlibRoots);
+                const client = await getClient(config.typelispPath, config.stdlibRoots, file);
                 const uri = makeUri(file);
                 const text = readFile(file);
                 const result = await withDocument(client, uri, text, () => client.getType(uri, position));
@@ -530,7 +537,7 @@ export default defineToolPlugin({
                 name: Type.String({ description: "Name to find references for." }),
             }),
             execute: async ({ file, name }, config) => {
-                const client = await getClient(config.typelispPath, config.stdlibRoots);
+                const client = await getClient(config.typelispPath, config.stdlibRoots, file);
                 const uri = makeUri(file);
                 const text = readFile(file);
                 const result = await withDocument(client, uri, text, () => client.findReferences(uri, name));
