@@ -85,6 +85,133 @@ function writeFile(filePath: string, text: string): void {
   fs.writeFileSync(tmp, text, "utf-8");
   fs.renameSync(tmp, filePath);
 }
+
+// Parse OpenClaw-style patch text into file edits
+interface PatchEdit {
+  filePath: string;
+  oldText: string;
+  newText: string;
+}
+
+function parsePatchText(patchText: string): PatchEdit[] {
+  const edits: PatchEdit[] = [];
+  const lines = patchText.split("\n");
+  let i = 0;
+
+  while (i < lines.length) {
+    // Look for "*** Begin Patch" or "*** Update File:"
+    if (lines[i].trim().startsWith("*** Update File:")) {
+      const filePath = lines[i].trim().slice("*** Update File:".length).trim();
+      i++;
+
+      // Skip header lines (---, +++, @@)
+      while (i < lines.length && !lines[i].trim().startsWith("*** ")) {
+        if (lines[i].startsWith("@@")) {
+          // Start of a hunk - read until next hunk or end
+          i++;
+          const hunkLines: string[] = [];
+          while (i < lines.length && !lines[i].startsWith("@@") && !lines[i].trim().startsWith("*** ")) {
+            hunkLines.push(lines[i]);
+            i++;
+          }
+
+          // Parse hunk to extract old/new text
+          // For simplicity, we look for contiguous - and + lines
+          const oldLines: string[] = [];
+          const newLines: string[] = [];
+          for (const line of hunkLines) {
+            if (line.startsWith("- ")) {
+              oldLines.push(line.slice(2));
+            } else if (line.startsWith("+ ")) {
+              newLines.push(line.slice(2));
+            } else if (line.startsWith(" ")) {
+              // Context line - part of both
+              oldLines.push(line.slice(1));
+              newLines.push(line.slice(1));
+            } else {
+              // Context line without space prefix
+              oldLines.push(line);
+              newLines.push(line);
+            }
+          }
+
+          if (oldLines.length > 0) {
+            edits.push({
+              filePath,
+              oldText: oldLines.join("\n"),
+              newText: newLines.join("\n"),
+            });
+          }
+        } else {
+          i++;
+        }
+      }
+    } else {
+      i++;
+    }
+  }
+
+  return edits;
+}
+
+// Simpler patch parser for the common case: oldText/newText pairs
+function parseSimplePatch(patchText: string): { oldText: string; newText: string } | null {
+  const oldMarker = "--- a/";
+  const newMarker = "+++ b/";
+
+  // Find the hunk markers
+  const lines = patchText.split("\n");
+  let inHunk = false;
+  const oldLines: string[] = [];
+  const newLines: string[] = [];
+
+  for (const line of lines) {
+    if (line.startsWith("@@")) {
+      inHunk = true;
+      continue;
+    }
+    if (!inHunk) continue;
+
+    if (line.startsWith("- ")) {
+      oldLines.push(line.slice(2));
+    } else if (line.startsWith("+ ")) {
+      newLines.push(line.slice(2));
+    } else if (line.startsWith(" ")) {
+      oldLines.push(line.slice(1));
+      newLines.push(line.slice(1));
+    } else if (line.trim() === "" || line.startsWith("*** ")) {
+      break;
+    } else {
+      oldLines.push(line);
+      newLines.push(line);
+    }
+  }
+
+  if (oldLines.length === 0) return null;
+
+  return {
+    oldText: oldLines.join("\n"),
+    newText: newLines.join("\n"),
+  };
+}
+
+// Apply a simple find-and-replace patch to a file
+function applySimplePatch(fileText: string, oldText: string, newText: string): { success: boolean; text?: string; error?: string } {
+  if (oldText === "") {
+    return { success: false, error: "oldText cannot be empty" };
+  }
+
+  const count = (fileText.split(oldText).length - 1);
+  if (count === 0) {
+    return { success: false, error: "oldText not found in document" };
+  }
+  if (count > 1) {
+    return { success: false, error: "oldText occurs more than once in document" };
+  }
+
+  const replaced = fileText.replace(oldText, newText);
+  return { success: true, text: replaced };
+}
 // Helper: open document, execute operation, then close to prevent memory leaks
 async function withDocument<T>(
   client: TypeLispLspClient,
@@ -284,6 +411,57 @@ export default defineToolPlugin({
 
         writeFile(file, result.text!);
         return { success: true, message: `Patched ${file}` };
+      },
+    }),
+
+    tool({
+      name: "typelisp_edit_apply_patch",
+      label: "Apply Patch to TypeLisp File",
+      description: "Apply a unified diff patch to one or more .tl files. Uses direct text replacement (no LSP) so it works on files of any size and outside the sandbox.",
+      parameters: Type.Object({
+        input: Type.String({ description: "Patch text in *** Begin Patch / *** End Patch format." }),
+        dry_run: Type.Optional(Type.Boolean({ description: "Preview diff without writing." })),
+        check: Type.Optional(Type.Boolean({ description: "Compile-check each modified file after applying (requires typelisp)." })),
+      }),
+      execute: async ({ input, dry_run, check }, config) => {
+        // Parse the patch to find file path and old/new text
+        const parsed = parseSimplePatch(input);
+        if (!parsed) {
+          return { success: false, error: "Could not parse patch. Expected unified diff format with @@ hunk markers." };
+        }
+
+        // Extract file path from patch header
+        const fileMatch = input.match(/\*\*\* Update File:\s*(.+)/);
+        const filePath = fileMatch ? fileMatch[1].trim() : null;
+        if (!filePath) {
+          return { success: false, error: "Patch must include '*** Update File: <path>' header." };
+        }
+
+        const text = readFile(filePath);
+        const result = applySimplePatch(text, parsed.oldText, parsed.newText);
+        if (!result.success) {
+          return { success: false, error: result.error };
+        }
+
+        // Optional compile-check
+        let checkResult: string | undefined;
+        if (check) {
+          try {
+            const client = await getClient(config.typelispPath, config.stdlibRoots, filePath);
+            const uri = makeUri(filePath);
+            const checkRes = await withDocument(client, uri, result.text!, () => client.check(uri));
+            checkResult = checkRes.success ? "OK" : (checkRes.error || "Check failed");
+          } catch (e: any) {
+            checkResult = `Check error: ${e.message}`;
+          }
+        }
+
+        if (dry_run) {
+          return { success: true, dryRun: true, diff: { old: text, new: result.text }, checkResult };
+        }
+
+        writeFile(filePath, result.text!);
+        return { success: true, message: `Applied patch to ${filePath}`, checkResult };
       },
     }),
 
