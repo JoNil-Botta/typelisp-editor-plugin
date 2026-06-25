@@ -12,6 +12,7 @@ describe("typelisp-editor-plugin", () => {
     expect(tools).toContain("typelisp_edit_patch");
     expect(tools).toContain("typelisp_edit_replace_body");
     expect(tools).toContain("typelisp_edit_format");
+    expect(tools).not.toContain("typelisp_edit_apply_patch");
   });
 });
 
@@ -62,6 +63,31 @@ describe("LSP client", () => {
 
     await client.closeDocument(uri);
   }, 30000);
+
+  it("patch applies formatting after replacement", async () => {
+    const testFile = path.join(tmpDir, "format_test.tl");
+    fs.writeFileSync(
+      testFile,
+      "(define   (f)  :  i64   (+ 1   2))",
+      "utf-8"
+    );
+
+    if (!client) {
+      client = new TypeLispLspClient(typelispPath, [tmpDir]);
+      await client.start();
+    }
+
+    const uri = "file://" + testFile;
+    const text = fs.readFileSync(testFile, "utf-8");
+    await client.openDocument(uri, text);
+
+    const result = await client.patch(uri, "(+ 1   2)", "(+ 3   4)");
+    expect(result.success).toBe(true);
+    // Should be formatted with consistent spacing
+    expect(result.text).toContain("(define (f) : i64");
+
+    await client.closeDocument(uri);
+  }, 10000);
 
   it("replaceBody accepts nested let expressions", async () => {
     const testFile = path.join(tmpDir, "let_test.tl");
