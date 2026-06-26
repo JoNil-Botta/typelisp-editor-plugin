@@ -119,7 +119,7 @@ export default defineToolPlugin({
     tool({
       name: "typelisp_edit_check",
       label: "Check TypeLisp File",
-      description: "Compile-check a .tl file without writing changes. Returns parse/type errors if any.",
+      description: "**MANDATORY for .tl files** — Compile-check a .tl file without writing changes. Returns parse/type errors if any. NEVER use `edit`/`write`/`apply_patch` on .tl files; those tools break s-expressions.",
       parameters: Type.Object({
         file: Type.String({ description: "Path to the .tl file to check." }),
       }),
@@ -141,7 +141,7 @@ export default defineToolPlugin({
     tool({
       name: "typelisp_edit_list",
       label: "List TypeLisp Functions",
-      description: "List all top-level forms (functions, structs, etc.) in a .tl file.",
+      description: "**MANDATORY for .tl files** — List all top-level forms (functions, structs, etc.) in a .tl file. NEVER use `edit`/`write`/`apply_patch` on .tl files.",
       parameters: Type.Object({
         file: Type.String({ description: "Path to the .tl file." }),
       }),
@@ -157,7 +157,7 @@ export default defineToolPlugin({
     tool({
       name: "typelisp_edit_append",
       label: "Append TypeLisp Form",
-      description: "Append a new top-level form to the end of a .tl file. Validates before writing.",
+      description: "**MANDATORY for .tl files** — Append a new top-level form to the end of a .tl file. Validates before writing. NEVER use `edit`/`write`/`apply_patch` on .tl files; those tools break s-expressions.",
       parameters: Type.Object({
         file: Type.String({ description: "Path to the .tl file to edit." }),
         form: Type.String({ description: "The new form text (e.g., '(define (foo ...) ...)' )." }),
@@ -184,7 +184,7 @@ export default defineToolPlugin({
     tool({
       name: "typelisp_edit_insert_after",
       label: "Insert TypeLisp Form After",
-      description: "Insert a new form after an existing one. Pass either 'name' (to insert after a named form) or 'position' (to insert after a specific position).",
+      description: "**MANDATORY for .tl files** — Insert a new form after an existing one. Pass either 'name' or 'position'. NEVER use `edit`/`write`/`apply_patch` on .tl files; those tools break s-expressions.",
       parameters: Type.Object({
         file: Type.String({ description: "Path to the .tl file to edit." }),
         name: Type.Optional(Type.String({ description: "Name of the form to insert after (alternative to position)." })),
@@ -227,7 +227,7 @@ export default defineToolPlugin({
     tool({
       name: "typelisp_edit_replace",
       label: "Replace TypeLisp Form",
-      description: "Replace a form by name (top-level) or at a position (any level).",
+      description: "**MANDATORY for .tl files** — Replace a form by name (top-level) or at a position (any level). NEVER use `edit`/`write`/`apply_patch` on .tl files; those tools break s-expressions.",
       parameters: Type.Object({
         file: Type.String({ description: "Path to the .tl file to edit." }),
         name: Type.Optional(Type.String({ description: "Name of the top-level form to replace." })),
@@ -263,7 +263,7 @@ export default defineToolPlugin({
     tool({
       name: "typelisp_edit_patch",
       label: "Patch TypeLisp File",
-      description: "Find and replace text anywhere in a .tl file, with form validation.",
+      description: "**MANDATORY for .tl files** — Find and replace text anywhere in a .tl file, with form validation. NEVER use `edit`/`write`/`apply_patch` on .tl files; those tools break s-expressions.",
       parameters: Type.Object({
         file: Type.String({ description: "Path to the .tl file to edit." }),
         oldText: Type.String({ description: "Exact text to find (must be unique)." }),
@@ -291,7 +291,7 @@ export default defineToolPlugin({
     tool({
       name: "typelisp_edit_replace_body",
       label: "Replace TypeLisp Function Body",
-      description: "Replace the body of a function by name or at a position.",
+      description: "**MANDATORY for .tl files** — Replace the body of a function by name or at a position. NEVER use `edit`/`write`/`apply_patch` on .tl files; those tools break s-expressions.",
       parameters: Type.Object({
         file: Type.String({ description: "Path to the .tl file to edit." }),
         name: Type.Optional(Type.String({ description: "Name of the function." })),
@@ -331,7 +331,7 @@ export default defineToolPlugin({
     tool({
       name: "typelisp_edit_replace_pattern",
       label: "Replace Pattern in TypeLisp Function",
-      description: "Whole-word pattern replacement within a function body by name or at a position.",
+      description: "**MANDATORY for .tl files** — Whole-word pattern replacement within a function body by name or at a position. NEVER use `edit`/`write`/`apply_patch` on .tl files; those tools break s-expressions.",
       parameters: Type.Object({
         file: Type.String({ description: "Path to the .tl file to edit." }),
         name: Type.Optional(Type.String({ description: "Name of the function." })),
@@ -372,7 +372,7 @@ export default defineToolPlugin({
     tool({
       name: "typelisp_edit_delete",
       label: "Delete TypeLisp Form",
-      description: "Delete a form by name (top-level) or at a position (any level).",
+      description: "**MANDATORY for .tl files** — Delete a form by name (top-level) or at a position (any level). NEVER use `edit`/`write`/`apply_patch` on .tl files; those tools break s-expressions.",
       parameters: Type.Object({
         file: Type.String({ description: "Path to the .tl file to edit." }),
         name: Type.Optional(Type.String({ description: "Name of the top-level form to delete." })),
@@ -411,7 +411,7 @@ export default defineToolPlugin({
     tool({
       name: "typelisp_edit_format",
       label: "Format TypeLisp File",
-      description: "Format a .tl file in-place using the LSP formatter.",
+      description: "**MANDATORY for .tl files** — Format a .tl file in-place using the LSP formatter. NEVER use `edit`/`write`/`apply_patch` on .tl files; those tools break s-expressions.",
       parameters: Type.Object({
         file: Type.String({ description: "Path to the .tl file to format." }),
         dry_run: Type.Optional(Type.Boolean({ description: "Preview diff without writing." })),
@@ -459,7 +459,7 @@ export default defineToolPlugin({
     tool({
       name: "typelisp_edit_move",
       label: "Move TypeLisp Form",
-      description: "Move a top-level form by name or at a position. Pass either 'destination' (name of form to move after) or 'direction' ('up'/'down' for adjacent swap).",
+      description: "**MANDATORY for .tl files** — Move a top-level form by name or at a position. NEVER use `edit`/`write`/`apply_patch` on .tl files; those tools break s-expressions.",
       parameters: Type.Object({
         file: Type.String({ description: "Path to the .tl file to edit." }),
         name: Type.Optional(Type.String({ description: "Name of the top-level form to move." })),
@@ -499,7 +499,7 @@ export default defineToolPlugin({
     tool({
       name: "typelisp_edit_rename",
       label: "Rename in TypeLisp File",
-      description: "Rename all occurrences of a name by old name or at a position.",
+      description: "**MANDATORY for .tl files** — Rename all occurrences of a name by old name or at a position. NEVER use `edit`/`write`/`apply_patch` on .tl files; those tools break s-expressions.",
       parameters: Type.Object({
         file: Type.String({ description: "Path to the .tl file to edit." }),
         name: Type.Optional(Type.String({ description: "Old name to replace." })),
