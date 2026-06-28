@@ -15,7 +15,7 @@ export class TypeLispLspClient {
   private process: ChildProcess | null = null;
   private requestId = 0;
   private pending = new Map<number, (msg: JsonRpcMessage) => void>();
-  private buffer = "";
+  private buffer: Buffer = Buffer.alloc(0);
   private running = false;
   private timeoutMs = 30000; // 30 second request timeout
 
@@ -42,7 +42,7 @@ export class TypeLispLspClient {
       this.running = true;
 
       this.process.stdout?.on("data", (data: Buffer) => {
-        this.buffer += data.toString("utf-8");
+        this.buffer = Buffer.concat([this.buffer, data]);
         this.processBuffer();
       });
 
@@ -85,16 +85,20 @@ export class TypeLispLspClient {
 
   private processBuffer(): void {
     while (true) {
-      const headerMatch = this.buffer.match(/Content-Length: (\d+)\r\n\r\n/);
-      if (!headerMatch) break;
+      const headerEnd = this.buffer.indexOf("\r\n\r\n");
+      if (headerEnd === -1) break;
 
-      const contentLength = parseInt(headerMatch[1], 10);
-      const headerEnd = headerMatch.index! + headerMatch[0].length;
+      const header = this.buffer.slice(0, headerEnd).toString("utf-8");
+      const match = header.match(/Content-Length: (\d+)/);
+      if (!match) break;
 
-      if (this.buffer.length < headerEnd + contentLength) break;
+      const contentLength = parseInt(match[1], 10);
+      const contentStart = headerEnd + 4;
 
-      const content = this.buffer.slice(headerEnd, headerEnd + contentLength);
-      this.buffer = this.buffer.slice(headerEnd + contentLength);
+      if (this.buffer.length < contentStart + contentLength) break;
+
+      const content = this.buffer.slice(contentStart, contentStart + contentLength).toString("utf-8");
+      this.buffer = this.buffer.slice(contentStart + contentLength);
 
       try {
         const msg: JsonRpcMessage = JSON.parse(content);

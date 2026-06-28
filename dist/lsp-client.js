@@ -5,7 +5,7 @@ export class TypeLispLspClient {
     process = null;
     requestId = 0;
     pending = new Map();
-    buffer = "";
+    buffer = Buffer.alloc(0);
     running = false;
     timeoutMs = 30000; // 30 second request timeout
     constructor(typelispPath, stdlibRoots = []) {
@@ -26,7 +26,7 @@ export class TypeLispLspClient {
             });
             this.running = true;
             this.process.stdout?.on("data", (data) => {
-                this.buffer += data.toString("utf-8");
+                this.buffer = Buffer.concat([this.buffer, data]);
                 this.processBuffer();
             });
             this.process.stderr?.on("data", (data) => {
@@ -63,15 +63,19 @@ export class TypeLispLspClient {
     }
     processBuffer() {
         while (true) {
-            const headerMatch = this.buffer.match(/Content-Length: (\d+)\r\n\r\n/);
-            if (!headerMatch)
+            const headerEnd = this.buffer.indexOf("\r\n\r\n");
+            if (headerEnd === -1)
                 break;
-            const contentLength = parseInt(headerMatch[1], 10);
-            const headerEnd = headerMatch.index + headerMatch[0].length;
-            if (this.buffer.length < headerEnd + contentLength)
+            const header = this.buffer.slice(0, headerEnd).toString("utf-8");
+            const match = header.match(/Content-Length: (\d+)/);
+            if (!match)
                 break;
-            const content = this.buffer.slice(headerEnd, headerEnd + contentLength);
-            this.buffer = this.buffer.slice(headerEnd + contentLength);
+            const contentLength = parseInt(match[1], 10);
+            const contentStart = headerEnd + 4;
+            if (this.buffer.length < contentStart + contentLength)
+                break;
+            const content = this.buffer.slice(contentStart, contentStart + contentLength).toString("utf-8");
+            this.buffer = this.buffer.slice(contentStart + contentLength);
             try {
                 const msg = JSON.parse(content);
                 if (msg.id !== undefined && this.pending.has(msg.id)) {

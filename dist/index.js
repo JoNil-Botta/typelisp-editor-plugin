@@ -81,21 +81,11 @@ function writeFile(filePath, text) {
     fs.writeFileSync(tmp, text, "utf-8");
     fs.renameSync(tmp, filePath);
 }
-// Helper: open document, execute operation, then close to prevent memory leaks
+// Helper: open document and execute operation. Document stays open to avoid
+// close/open overhead and prevent memory issues from repeated didOpen/didClose.
 async function withDocument(client, uri, text, operation) {
     await client.openDocument(uri, text);
-    try {
-        const result = await operation();
-        return result;
-    }
-    finally {
-        try {
-            await client.closeDocument(uri);
-        }
-        catch (_) {
-            // Ignore close errors
-        }
-    }
+    return await operation();
 }
 export default defineToolPlugin({
     id: "typelisp-editor",
