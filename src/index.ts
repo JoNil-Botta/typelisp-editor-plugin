@@ -86,7 +86,8 @@ function writeFile(filePath: string, text: string): void {
   fs.renameSync(tmp, filePath);
 }
 
-// Helper: open document, execute operation, then close to prevent memory leaks
+// Helper: open document and execute operation. Document stays open to avoid
+// close/open overhead and prevent memory issues from repeated didOpen/didClose.
 async function withDocument<T>(
   client: TypeLispLspClient,
   uri: string,
@@ -94,16 +95,7 @@ async function withDocument<T>(
   operation: () => Promise<T>
 ): Promise<T> {
   await client.openDocument(uri, text);
-  try {
-    const result = await operation();
-    return result;
-  } finally {
-    try {
-      await client.closeDocument(uri);
-    } catch (_) {
-      // Ignore close errors
-    }
-  }
+  return await operation();
 }
 
 
