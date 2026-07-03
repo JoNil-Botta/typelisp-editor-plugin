@@ -34,10 +34,12 @@ async function getClient(typelispPath?: string, stdlibRoots?: string[], filePath
         try { globalClient.stop(); } catch (_) {}
         globalClient = null;
         globalClientPromise = null;
+        openDocuments.clear();
       }
     } else {
       globalClient = null;
       globalClientPromise = null;
+      openDocuments.clear();
     }
   }
 
@@ -88,13 +90,19 @@ function writeFile(filePath: string, text: string): void {
 
 // Helper: open document and execute operation. Document stays open to avoid
 // close/open overhead and prevent memory issues from repeated didOpen/didClose.
+// Track which documents are already open to avoid repeated didOpen/compile overhead
+const openDocuments = new Set<string>();
+
 async function withDocument<T>(
   client: TypeLispLspClient,
   uri: string,
   text: string,
   operation: () => Promise<T>
 ): Promise<T> {
-  await client.openDocument(uri, text);
+  if (!openDocuments.has(uri)) {
+    await client.openDocument(uri, text);
+    openDocuments.add(uri);
+  }
   return await operation();
 }
 

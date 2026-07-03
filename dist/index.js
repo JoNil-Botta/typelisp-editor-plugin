@@ -36,11 +36,13 @@ async function getClient(typelispPath, stdlibRoots, filePath) {
                 catch (_) { }
                 globalClient = null;
                 globalClientPromise = null;
+                openDocuments.clear();
             }
         }
         else {
             globalClient = null;
             globalClientPromise = null;
+            openDocuments.clear();
         }
     }
     const tlPath = typelispPath || findTypelisp();
@@ -81,21 +83,16 @@ function writeFile(filePath, text) {
     fs.writeFileSync(tmp, text, "utf-8");
     fs.renameSync(tmp, filePath);
 }
-// Helper: open document, execute operation, then close to prevent memory leaks
+// Helper: open document and execute operation. Document stays open to avoid
+// close/open overhead and prevent memory issues from repeated didOpen/didClose.
+// Track which documents are already open to avoid repeated didOpen/compile overhead
+const openDocuments = new Set();
 async function withDocument(client, uri, text, operation) {
-    await client.openDocument(uri, text);
-    try {
-        const result = await operation();
-        return result;
+    if (!openDocuments.has(uri)) {
+        await client.openDocument(uri, text);
+        openDocuments.add(uri);
     }
-    finally {
-        try {
-            await client.closeDocument(uri);
-        }
-        catch (_) {
-            // Ignore close errors
-        }
-    }
+    return await operation();
 }
 export default defineToolPlugin({
     id: "typelisp-editor",

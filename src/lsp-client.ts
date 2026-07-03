@@ -17,7 +17,7 @@ export class TypeLispLspClient {
   private pending = new Map<number, (msg: JsonRpcMessage) => void>();
   private buffer: Buffer = Buffer.alloc(0);
   private running = false;
-  private timeoutMs = 30000; // 30 second request timeout
+  private timeoutMs = 120000; // 2 minute request timeout (was 30s — too short for large files)
 
   constructor(
     private typelispPath: string,
