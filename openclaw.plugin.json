@@ -40,7 +40,10 @@
       "typelisp_edit_get_type",
       "typelisp_edit_find_references",
       "typelisp_edit_patch",
-      "typelisp_edit_apply_patch"
+      "typelisp_edit_batch",
+      "typelisp_edit_project_search",
+      "typelisp_edit_signature_help",
+      "typelisp_edit_eval_at_point"
     ]
   }
 }

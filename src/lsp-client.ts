@@ -185,6 +185,37 @@ export class TypeLispLspClient {
     });
   }
 
+  changeDocument(uri: string, text: string): Promise<void> {
+    return new Promise((resolve, reject) => {
+      if (!this.process || !this.running) {
+        reject(new Error("LSP client is not running"));
+        return;
+      }
+
+      const msg = {
+        jsonrpc: "2.0",
+        method: "textDocument/didChange",
+        params: {
+          textDocument: { uri, version: Date.now() },
+          contentChanges: [{ text }],
+        },
+      };
+      const content = JSON.stringify(msg);
+      const header = `Content-Length: ${Buffer.byteLength(content, "utf-8")}\r\n\r\n`;
+      try {
+        this.process.stdin?.write(header + content, (err) => {
+          if (err) {
+            reject(err);
+          } else {
+            resolve();
+          }
+        });
+      } catch (err) {
+        reject(err);
+      }
+    });
+  }
+
   closeDocument(uri: string): Promise<void> {
     return new Promise((resolve, reject) => {
       if (!this.process || !this.running) {
@@ -506,6 +537,55 @@ export class TypeLispLspClient {
       success: resp.result?.success || false,
       references: resp.result?.references,
       error: resp.error?.message,
+    };
+  }
+
+  async batch(uri: string, operations: Array<{ method: string; name?: string; newText?: string }>): Promise<{ success: boolean; text?: string; error?: string; results?: any[] }> {
+    const resp = await this.sendRequest("tl/batch", {
+      textDocument: { uri },
+      operations,
+    });
+    return {
+      success: resp.result?.success || false,
+      text: resp.result?.text,
+      results: resp.result?.results,
+      error: resp.error?.message,
+    };
+  }
+
+  async projectSearch(uri: string, query: string): Promise<{ success: boolean; results?: any[]; error?: string }> {
+    const resp = await this.sendRequest("tl/projectSearch", {
+      textDocument: { uri },
+      query,
+    });
+    return {
+      success: resp.result?.success || false,
+      results: resp.result?.results,
+      error: resp.error?.message,
+    };
+  }
+
+  async signatureHelp(uri: string, position: { line: number; character: number }): Promise<{ success: boolean; signatures?: any[]; error?: string }> {
+    const resp = await this.sendRequest("tl/signatureHelp", {
+      textDocument: { uri },
+      position,
+    });
+    return {
+      success: resp.result?.success || false,
+      signatures: resp.result?.signatures,
+      error: resp.result?.error || resp.error?.message,
+    };
+  }
+
+  async evalAtPoint(uri: string, position: { line: number; character: number }): Promise<{ success: boolean; result?: string; error?: string }> {
+    const resp = await this.sendRequest("tl/evalAtPoint", {
+      textDocument: { uri },
+      position,
+    });
+    return {
+      success: resp.result?.success || false,
+      result: resp.result?.result,
+      error: resp.result?.error || resp.error?.message,
     };
   }
 }
