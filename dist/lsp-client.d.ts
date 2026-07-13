@@ -26,6 +26,7 @@ export declare class TypeLispLspClient {
     private processBuffer;
     sendRequest(method: string, params: any): Promise<JsonRpcMessage>;
     openDocument(uri: string, text: string): Promise<void>;
+    changeDocument(uri: string, text: string): Promise<void>;
     closeDocument(uri: string): Promise<void>;
     listFunctions(uri: string): Promise<string[]>;
     appendFunction(uri: string, newText: string): Promise<{
@@ -152,6 +153,21 @@ export declare class TypeLispLspClient {
     findReferences(uri: string, name: string): Promise<{
         success: boolean;
         references?: any[];
+        error?: string;
+    }>;
+    batch(uri: string, operations: Array<{
+        method: string;
+        name?: string;
+        newText?: string;
+    }>): Promise<{
+        success: boolean;
+        text?: string;
+        error?: string;
+        results?: any[];
+    }>;
+    projectSearch(uri: string, query: string): Promise<{
+        success: boolean;
+        results?: any[];
         error?: string;
     }>;
 }

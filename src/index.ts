@@ -667,7 +667,7 @@ export default defineToolPlugin({
       description: "Search for symbols across the entire TypeLisp project.",
       parameters: Type.Object({
         file: Type.String({ description: "Path to a .tl file in the project (used to resolve project root)." }),
-        query: Type.String({ description: "Search query." }),
+        query: Type.String({ description: "Symbol name to search for." }),
       }),
       execute: async ({ file, query }, config) => {
         const client = await getClient(config.typelispPath, config.stdlibRoots, file);
@@ -678,52 +678,6 @@ export default defineToolPlugin({
           return { success: false, error: result.error || "projectSearch failed" };
         }
         return { success: true, results: result.results };
-      },
-    }),
-
-    tool({
-      name: "typelisp_edit_signature_help",
-      label: "TypeLisp Signature Help",
-      description: "Get function signature information at a cursor position.",
-      parameters: Type.Object({
-        file: Type.String({ description: "Path to the .tl file." }),
-        position: Type.Object({
-          line: Type.Number({ description: "0-indexed line number." }),
-          character: Type.Number({ description: "0-indexed character offset." }),
-        }),
-      }),
-      execute: async ({ file, position }, config) => {
-        const client = await getClient(config.typelispPath, config.stdlibRoots, file);
-        const uri = makeUri(file);
-        const text = readFile(file);
-        const result = await withDocument(client, uri, text, () => client.signatureHelp(uri, position));
-        if (!result.success) {
-          return { success: false, error: result.error || "signatureHelp failed" };
-        }
-        return { success: true, signatures: result.signatures };
-      },
-    }),
-
-    tool({
-      name: "typelisp_edit_eval_at_point",
-      label: "Evaluate TypeLisp at Point",
-      description: "Evaluate the expression at a cursor position using compile-time evaluation.",
-      parameters: Type.Object({
-        file: Type.String({ description: "Path to the .tl file." }),
-        position: Type.Object({
-          line: Type.Number({ description: "0-indexed line number." }),
-          character: Type.Number({ description: "0-indexed character offset." }),
-        }),
-      }),
-      execute: async ({ file, position }, config) => {
-        const client = await getClient(config.typelispPath, config.stdlibRoots, file);
-        const uri = makeUri(file);
-        const text = readFile(file);
-        const result = await withDocument(client, uri, text, () => client.evalAtPoint(uri, position));
-        if (!result.success) {
-          return { success: false, error: result.error || "evalAtPoint failed" };
-        }
-        return { success: true, result: result.result };
       },
     }),
   ],

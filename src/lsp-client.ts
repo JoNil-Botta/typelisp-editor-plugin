@@ -556,36 +556,12 @@ export class TypeLispLspClient {
   async projectSearch(uri: string, query: string): Promise<{ success: boolean; results?: any[]; error?: string }> {
     const resp = await this.sendRequest("tl/projectSearch", {
       textDocument: { uri },
-      query,
+      name: query,
     });
     return {
       success: resp.result?.success || false,
       results: resp.result?.results,
       error: resp.error?.message,
-    };
-  }
-
-  async signatureHelp(uri: string, position: { line: number; character: number }): Promise<{ success: boolean; signatures?: any[]; error?: string }> {
-    const resp = await this.sendRequest("tl/signatureHelp", {
-      textDocument: { uri },
-      position,
-    });
-    return {
-      success: resp.result?.success || false,
-      signatures: resp.result?.signatures,
-      error: resp.result?.error || resp.error?.message,
-    };
-  }
-
-  async evalAtPoint(uri: string, position: { line: number; character: number }): Promise<{ success: boolean; result?: string; error?: string }> {
-    const resp = await this.sendRequest("tl/evalAtPoint", {
-      textDocument: { uri },
-      position,
-    });
-    return {
-      success: resp.result?.success || false,
-      result: resp.result?.result,
-      error: resp.result?.error || resp.error?.message,
     };
   }
 }

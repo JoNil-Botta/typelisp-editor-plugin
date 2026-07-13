@@ -83,6 +83,14 @@ function writeFile(filePath, text) {
     fs.writeFileSync(tmp, text, "utf-8");
     fs.renameSync(tmp, filePath);
 }
+async function syncDocument(client, uri, newText) {
+    if (openDocuments.has(uri)) {
+        try {
+            await client.changeDocument(uri, newText);
+        }
+        catch (_) { /* best-effort */ }
+    }
+}
 // Helper: open document and execute operation. Document stays open to avoid
 // close/open overhead and prevent memory issues from repeated didOpen/didClose.
 // Track which documents are already open to avoid repeated didOpen/compile overhead
@@ -151,16 +159,26 @@ export default defineToolPlugin({
             execute: async ({ file, form, dry_run }, config) => {
                 const client = await getClient(config.typelispPath, config.stdlibRoots, file);
                 const uri = makeUri(file);
-                const text = readFile(file);
+                let text;
+                let createdNew = false;
+                if (!fs.existsSync(file)) {
+                    text = "";
+                    createdNew = true;
+                }
+                else {
+                    text = readFile(file);
+                }
                 const result = await withDocument(client, uri, text, () => client.appendFunction(uri, form));
                 if (!result.success) {
                     return { success: false, error: result.error || "appendFunction failed" };
                 }
+                const finalText = result.text;
                 if (dry_run) {
-                    return { success: true, dryRun: true, diff: { old: text, new: result.text } };
+                    return { success: true, dryRun: true, diff: { old: text, new: finalText } };
                 }
-                writeFile(file, result.text);
-                return { success: true, message: `Appended form to ${file}` };
+                writeFile(file, finalText);
+                await syncDocument(client, uri, finalText);
+                return { success: true, message: createdNew ? `Created ${file} with new form` : `Appended form to ${file}` };
             },
         }),
         tool({
@@ -196,10 +214,12 @@ export default defineToolPlugin({
                 if (!result.success) {
                     return { success: false, error: result.error || "insertAfter failed" };
                 }
+                const finalText = result.text;
                 if (dry_run) {
-                    return { success: true, dryRun: true, diff: { old: text, new: result.text } };
+                    return { success: true, dryRun: true, diff: { old: text, new: finalText } };
                 }
-                writeFile(file, result.text);
+                writeFile(file, finalText);
+                await syncDocument(client, uri, finalText);
                 const desc = name ? `after '${name}'` : `after position (${position?.line ?? 0}, ${position?.character ?? 0})`;
                 return { success: true, message: `Inserted form ${desc} in ${file}` };
             },
@@ -229,10 +249,12 @@ export default defineToolPlugin({
                 if (!result.success) {
                     return { success: false, error: result.error || "replaceFunction failed" };
                 }
+                const finalText = result.text;
                 if (dry_run) {
-                    return { success: true, dryRun: true, diff: { old: text, new: result.text } };
+                    return { success: true, dryRun: true, diff: { old: text, new: finalText } };
                 }
-                writeFile(file, result.text);
+                writeFile(file, finalText);
+                await syncDocument(client, uri, finalText);
                 const desc = position ? `at line ${position.line}, col ${position.character}` : `'${name}'`;
                 return { success: true, message: `Replaced ${desc} in ${file}` };
             },
@@ -255,10 +277,12 @@ export default defineToolPlugin({
                 if (!result.success) {
                     return { success: false, error: result.error || "patch failed" };
                 }
+                const finalText = result.text;
                 if (dry_run) {
-                    return { success: true, dryRun: true, diff: { old: text, new: result.text } };
+                    return { success: true, dryRun: true, diff: { old: text, new: finalText } };
                 }
-                writeFile(file, result.text);
+                writeFile(file, finalText);
+                await syncDocument(client, uri, finalText);
                 return { success: true, message: `Patched ${file}` };
             },
         }),
@@ -289,10 +313,12 @@ export default defineToolPlugin({
                 if (!result.success) {
                     return { success: false, error: result.error || "replaceBody failed" };
                 }
+                const finalText = result.text;
                 if (dry_run) {
-                    return { success: true, dryRun: true, diff: { old: text, new: result.text } };
+                    return { success: true, dryRun: true, diff: { old: text, new: finalText } };
                 }
-                writeFile(file, result.text);
+                writeFile(file, finalText);
+                await syncDocument(client, uri, finalText);
                 const desc = position ? `at line ${position.line}, col ${position.character}` : `'${name}'`;
                 return { success: true, message: `Replaced body of ${desc} in ${file}` };
             },
@@ -325,10 +351,12 @@ export default defineToolPlugin({
                 if (!result.success) {
                     return { success: false, error: result.error || "replacePattern failed" };
                 }
+                const finalText = result.text;
                 if (dry_run) {
-                    return { success: true, dryRun: true, diff: { old: text, new: result.text } };
+                    return { success: true, dryRun: true, diff: { old: text, new: finalText } };
                 }
-                writeFile(file, result.text);
+                writeFile(file, finalText);
+                await syncDocument(client, uri, finalText);
                 const desc = position ? `at line ${position.line}, col ${position.character}` : `'${name}'`;
                 return { success: true, message: `Replaced pattern in ${desc} in ${file}` };
             },
@@ -359,10 +387,12 @@ export default defineToolPlugin({
                 if (!result.success) {
                     return { success: false, error: result.error || "deleteFunction failed" };
                 }
+                const finalText = result.text;
                 if (dry_run) {
-                    return { success: true, dryRun: true, diff: { old: text, new: result.text } };
+                    return { success: true, dryRun: true, diff: { old: text, new: finalText } };
                 }
-                writeFile(file, result.text);
+                writeFile(file, finalText);
+                await syncDocument(client, uri, finalText);
                 const desc = position ? `at line ${position.line}, col ${position.character}` : `'${name}'`;
                 return { success: true, message: `Deleted ${desc} from ${file}` };
             },
@@ -383,10 +413,12 @@ export default defineToolPlugin({
                 if (!result.success) {
                     return { success: false, error: result.error || "format failed" };
                 }
+                const finalText = result.text;
                 if (dry_run) {
-                    return { success: true, dryRun: true, diff: { old: text, new: result.text } };
+                    return { success: true, dryRun: true, diff: { old: text, new: finalText } };
                 }
-                writeFile(file, result.text);
+                writeFile(file, finalText);
+                await syncDocument(client, uri, finalText);
                 return { success: true, message: `Formatted ${file}` };
             },
         }),
@@ -442,10 +474,12 @@ export default defineToolPlugin({
                 if (!result.success) {
                     return { success: false, error: result.error || "move failed" };
                 }
+                const finalText = result.text;
                 if (dry_run) {
-                    return { success: true, dryRun: true, diff: { old: text, new: result.text } };
+                    return { success: true, dryRun: true, diff: { old: text, new: finalText } };
                 }
-                writeFile(file, result.text);
+                writeFile(file, finalText);
+                await syncDocument(client, uri, finalText);
                 const desc = position ? `at line ${position.line}, col ${position.character}` : `'${name}'`;
                 const moveDesc = destination ? `after '${destination}'` : `${direction}`;
                 return { success: true, message: `Moved ${desc} ${moveDesc} in ${file}` };
@@ -476,10 +510,12 @@ export default defineToolPlugin({
                 if (!result.success) {
                     return { success: false, error: result.error || "rename failed" };
                 }
+                const finalText = result.text;
                 if (dry_run) {
-                    return { success: true, dryRun: true, diff: { old: text, new: result.text } };
+                    return { success: true, dryRun: true, diff: { old: text, new: finalText } };
                 }
-                writeFile(file, result.text);
+                writeFile(file, finalText);
+                await syncDocument(client, uri, finalText);
                 const desc = position ? `at line ${position.line}, col ${position.character}` : `'${name}'`;
                 return { success: true, message: `Renamed ${desc} to '${new_name}' in ${file}` };
             },
@@ -542,6 +578,55 @@ export default defineToolPlugin({
                     return { success: false, error: result.error || "findReferences failed" };
                 }
                 return { success: true, references: result.references };
+            },
+        }),
+        tool({
+            name: "typelisp_edit_batch",
+            label: "Batch TypeLisp Edits",
+            description: "**MANDATORY for .tl files** — Execute multiple edits atomically in one LSP round-trip. Each operation has `method` (e.g. 'tl/replace', 'tl/replaceBody'), `name`, and `newText`. NEVER use `edit`/`write`/`apply_patch` on .tl files; those tools break s-expressions.",
+            parameters: Type.Object({
+                file: Type.String({ description: "Path to the .tl file to edit." }),
+                operations: Type.Array(Type.Object({
+                    method: Type.String({ description: "LSP method (e.g. 'tl/replace', 'tl/replaceBody', 'tl/delete')." }),
+                    name: Type.Optional(Type.String({ description: "Name of the form to operate on." })),
+                    newText: Type.Optional(Type.String({ description: "New text for the operation." })),
+                }), { description: "Operations to execute atomically." }),
+                dry_run: Type.Optional(Type.Boolean({ description: "Preview diff without writing." })),
+            }),
+            execute: async ({ file, operations, dry_run }, config) => {
+                const client = await getClient(config.typelispPath, config.stdlibRoots, file);
+                const uri = makeUri(file);
+                const text = readFile(file);
+                const result = await withDocument(client, uri, text, () => client.batch(uri, operations));
+                if (!result.success) {
+                    return { success: false, error: result.error || "batch failed" };
+                }
+                const finalText = result.text;
+                if (dry_run) {
+                    return { success: true, dryRun: true, diff: { old: text, new: finalText } };
+                }
+                writeFile(file, finalText);
+                await syncDocument(client, uri, finalText);
+                return { success: true, message: `Applied ${operations.length} operations to ${file}`, results: result.results };
+            },
+        }),
+        tool({
+            name: "typelisp_edit_project_search",
+            label: "Search TypeLisp Project",
+            description: "Search for symbols across the entire TypeLisp project.",
+            parameters: Type.Object({
+                file: Type.String({ description: "Path to a .tl file in the project (used to resolve project root)." }),
+                query: Type.String({ description: "Symbol name to search for." }),
+            }),
+            execute: async ({ file, query }, config) => {
+                const client = await getClient(config.typelispPath, config.stdlibRoots, file);
+                const uri = makeUri(file);
+                const text = readFile(file);
+                const result = await withDocument(client, uri, text, () => client.projectSearch(uri, query));
+                if (!result.success) {
+                    return { success: false, error: result.error || "projectSearch failed" };
+                }
+                return { success: true, results: result.results };
             },
         }),
     ],

@@ -156,6 +156,37 @@ export class TypeLispLspClient {
             }
         });
     }
+    changeDocument(uri, text) {
+        return new Promise((resolve, reject) => {
+            if (!this.process || !this.running) {
+                reject(new Error("LSP client is not running"));
+                return;
+            }
+            const msg = {
+                jsonrpc: "2.0",
+                method: "textDocument/didChange",
+                params: {
+                    textDocument: { uri, version: Date.now() },
+                    contentChanges: [{ text }],
+                },
+            };
+            const content = JSON.stringify(msg);
+            const header = `Content-Length: ${Buffer.byteLength(content, "utf-8")}\r\n\r\n`;
+            try {
+                this.process.stdin?.write(header + content, (err) => {
+                    if (err) {
+                        reject(err);
+                    }
+                    else {
+                        resolve();
+                    }
+                });
+            }
+            catch (err) {
+                reject(err);
+            }
+        });
+    }
     closeDocument(uri) {
         return new Promise((resolve, reject) => {
             if (!this.process || !this.running) {
@@ -459,6 +490,29 @@ export class TypeLispLspClient {
         return {
             success: resp.result?.success || false,
             references: resp.result?.references,
+            error: resp.error?.message,
+        };
+    }
+    async batch(uri, operations) {
+        const resp = await this.sendRequest("tl/batch", {
+            textDocument: { uri },
+            operations,
+        });
+        return {
+            success: resp.result?.success || false,
+            text: resp.result?.text,
+            results: resp.result?.results,
+            error: resp.error?.message,
+        };
+    }
+    async projectSearch(uri, query) {
+        const resp = await this.sendRequest("tl/projectSearch", {
+            textDocument: { uri },
+            name: query,
+        });
+        return {
+            success: resp.result?.success || false,
+            results: resp.result?.results,
             error: resp.error?.message,
         };
     }
