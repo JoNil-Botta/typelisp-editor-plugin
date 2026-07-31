@@ -1,7 +1,7 @@
 import { describe, expect, it, beforeAll, afterAll } from "vitest";
 import entry from "./index.js";
 import { getToolPluginMetadata } from "openclaw/plugin-sdk/tool-plugin";
-import { TypeLispLspClient } from "./lsp-client.js";
+import { TypeLispLspClient, editResult } from "./lsp-client.js";
 import * as fs from "fs";
 import * as path from "path";
 import * as os from "os";
@@ -17,6 +17,36 @@ describe("typelisp-editor-plugin", () => {
 });
 
 describe("LSP client", () => {
+  it("preserves structured JSON-RPC edit errors", () => {
+    expect(editResult({
+      jsonrpc: "2.0",
+      id: 1,
+      error: {
+        code: -32600,
+        message: "replaceBody rejected before writing",
+        data: { errorCode: "invalidBody", written: false },
+      },
+    })).toEqual({
+      success: false,
+      error: "replaceBody rejected before writing",
+      errorData: { errorCode: "invalidBody", written: false },
+    });
+
+    expect(editResult({
+      jsonrpc: "2.0",
+      id: 2,
+      result: {
+        success: false,
+        error: "batch operation failed",
+        context: { errorCode: "invalidBody", written: false },
+      },
+    })).toEqual({
+      success: false,
+      error: "batch operation failed",
+      errorData: { errorCode: "invalidBody", written: false },
+    });
+  });
+
   let client: TypeLispLspClient;
   let tmpDir: string;
   let typelispPath: string;

@@ -1,15 +1,24 @@
 import { ChildProcess } from "child_process";
-interface JsonRpcMessage {
+export interface JsonRpcError {
+    code: number;
+    message: string;
+    data?: unknown;
+}
+export interface JsonRpcMessage {
     jsonrpc: "2.0";
     id?: number;
     method?: string;
     params?: any;
     result?: any;
-    error?: {
-        code: number;
-        message: string;
-    };
+    error?: JsonRpcError;
 }
+export type EditResult = {
+    success: boolean;
+    text?: string;
+    error?: string;
+    errorData?: unknown;
+};
+export declare function editResult(resp: JsonRpcMessage): EditResult;
 export declare class TypeLispLspClient {
     private typelispPath;
     private stdlibRoots;
@@ -42,11 +51,7 @@ export declare class TypeLispLspClient {
         text?: string;
         error?: string;
     }>;
-    replaceBody(uri: string, name: string, newBody: string): Promise<{
-        success: boolean;
-        text?: string;
-        error?: string;
-    }>;
+    replaceBody(uri: string, name: string, newBody: string): Promise<EditResult>;
     replacePattern(uri: string, name: string | undefined, oldPattern: string, newPattern: string, position?: {
         line: number;
         character: number;
@@ -100,11 +105,7 @@ export declare class TypeLispLspClient {
     replaceBodyAt(uri: string, position: {
         line: number;
         character: number;
-    }, newBody: string): Promise<{
-        success: boolean;
-        text?: string;
-        error?: string;
-    }>;
+    }, newBody: string): Promise<EditResult>;
     replacePatternAt(uri: string, position: {
         line: number;
         character: number;
@@ -159,10 +160,7 @@ export declare class TypeLispLspClient {
         method: string;
         name?: string;
         newText?: string;
-    }>): Promise<{
-        success: boolean;
-        text?: string;
-        error?: string;
+    }>): Promise<EditResult & {
         results?: any[];
     }>;
     projectSearch(uri: string, query: string): Promise<{
@@ -171,4 +169,3 @@ export declare class TypeLispLspClient {
         error?: string;
     }>;
 }
-export {};

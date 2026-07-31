@@ -2,13 +2,35 @@ import { spawn, ChildProcess } from "child_process";
 import * as path from "path";
 import * as os from "os";
 
-interface JsonRpcMessage {
+export interface JsonRpcError {
+  code: number;
+  message: string;
+  data?: unknown;
+}
+
+export interface JsonRpcMessage {
   jsonrpc: "2.0";
   id?: number;
   method?: string;
   params?: any;
   result?: any;
-  error?: { code: number; message: string };
+  error?: JsonRpcError;
+}
+
+export type EditResult = {
+  success: boolean;
+  text?: string;
+  error?: string;
+  errorData?: unknown;
+};
+
+export function editResult(resp: JsonRpcMessage): EditResult {
+  return {
+    success: resp.result?.success || false,
+    text: resp.result?.text,
+    error: resp.error?.message || resp.result?.error,
+    errorData: resp.error?.data ?? resp.result?.context,
+  };
 }
 
 export class TypeLispLspClient {
@@ -294,17 +316,13 @@ export class TypeLispLspClient {
     };
   }
 
-  async replaceBody(uri: string, name: string, newBody: string): Promise<{ success: boolean; text?: string; error?: string }> {
+  async replaceBody(uri: string, name: string, newBody: string): Promise<EditResult> {
     const resp = await this.sendRequest("tl/replaceBody", {
       textDocument: { uri },
       name,
       newBody,
     });
-    return {
-      success: resp.result?.success || false,
-      text: resp.result?.text,
-      error: resp.error?.message,
-    };
+    return editResult(resp);
   }
 
   async replacePattern(uri: string, name: string | undefined, oldPattern: string, newPattern: string, position?: { line: number; character: number }): Promise<{ success: boolean; text?: string; error?: string }> {
@@ -424,17 +442,13 @@ export class TypeLispLspClient {
     return resp.result ?? null;
   }
 
-  async replaceBodyAt(uri: string, position: { line: number; character: number }, newBody: string): Promise<{ success: boolean; text?: string; error?: string }> {
+  async replaceBodyAt(uri: string, position: { line: number; character: number }, newBody: string): Promise<EditResult> {
     const resp = await this.sendRequest("tl/replaceBody", {
       textDocument: { uri },
       position,
       newBody,
     });
-    return {
-      success: resp.result?.success || false,
-      text: resp.result?.text,
-      error: resp.error?.message,
-    };
+    return editResult(resp);
   }
 
   async replacePatternAt(uri: string, position: { line: number; character: number }, oldPattern: string, newPattern: string): Promise<{ success: boolean; text?: string; error?: string }> {
@@ -540,16 +554,14 @@ export class TypeLispLspClient {
     };
   }
 
-  async batch(uri: string, operations: Array<{ method: string; name?: string; newText?: string }>): Promise<{ success: boolean; text?: string; error?: string; results?: any[] }> {
+  async batch(uri: string, operations: Array<{ method: string; name?: string; newText?: string }>): Promise<EditResult & { results?: any[] }> {
     const resp = await this.sendRequest("tl/batch", {
       textDocument: { uri },
       operations,
     });
     return {
-      success: resp.result?.success || false,
-      text: resp.result?.text,
+      ...editResult(resp),
       results: resp.result?.results,
-      error: resp.error?.message,
     };
   }
 

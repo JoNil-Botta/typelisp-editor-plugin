@@ -312,7 +312,7 @@ export default defineToolPlugin({
     tool({
       name: "typelisp_edit_replace_body",
       label: "Replace TypeLisp Function Body",
-      description: "**MANDATORY for .tl files** — Replace the body of a function by name or at a position. NEVER use `edit`/`write`/`apply_patch` on .tl files; those tools break s-expressions.",
+      description: "**MANDATORY for .tl files** — Replace the body of a function by name or at a position. `new_body` must contain one or more complete TypeLisp expression(s), without the `define`/`defmacro` header. The LSP validates the body before writing; rejected edits leave the file unchanged. NEVER use `edit`/`write`/`apply_patch` on .tl files; those tools break s-expressions.",
       parameters: Type.Object({
         file: Type.String({ description: "Path to the .tl file to edit." }),
         name: Type.Optional(Type.String({ description: "Name of the function." })),
@@ -336,7 +336,11 @@ export default defineToolPlugin({
             : client.replaceBodyAt(uri, position!, new_body)
         );
         if (!result.success) {
-          return { success: false, error: result.error || "replaceBody failed" };
+          return {
+            success: false,
+            error: result.error || "replaceBody failed",
+            ...(result.errorData !== undefined ? { errorData: result.errorData } : {}),
+          };
         }
 
         const finalText = result.text!;

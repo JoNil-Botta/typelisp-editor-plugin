@@ -1,4 +1,12 @@
 import { spawn } from "child_process";
+export function editResult(resp) {
+    return {
+        success: resp.result?.success || false,
+        text: resp.result?.text,
+        error: resp.error?.message || resp.result?.error,
+        errorData: resp.error?.data ?? resp.result?.context,
+    };
+}
 export class TypeLispLspClient {
     typelispPath;
     stdlibRoots;
@@ -267,11 +275,7 @@ export class TypeLispLspClient {
             name,
             newBody,
         });
-        return {
-            success: resp.result?.success || false,
-            text: resp.result?.text,
-            error: resp.error?.message,
-        };
+        return editResult(resp);
     }
     async replacePattern(uri, name, oldPattern, newPattern, position) {
         const params = {
@@ -388,11 +392,7 @@ export class TypeLispLspClient {
             position,
             newBody,
         });
-        return {
-            success: resp.result?.success || false,
-            text: resp.result?.text,
-            error: resp.error?.message,
-        };
+        return editResult(resp);
     }
     async replacePatternAt(uri, position, oldPattern, newPattern) {
         const resp = await this.sendRequest("tl/replacePattern", {
@@ -499,10 +499,8 @@ export class TypeLispLspClient {
             operations,
         });
         return {
-            success: resp.result?.success || false,
-            text: resp.result?.text,
+            ...editResult(resp),
             results: resp.result?.results,
-            error: resp.error?.message,
         };
     }
     async projectSearch(uri, query) {
