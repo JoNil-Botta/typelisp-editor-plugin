@@ -36,7 +36,14 @@ export function editResult(resp: JsonRpcMessage): EditResult {
 export class TypeLispLspClient {
   private process: ChildProcess | null = null;
   private requestId = 0;
-  private pending = new Map<number, (msg: JsonRpcMessage) => void>();
+  private pending = new Map<
+    number,
+    {
+      method: string;
+      resolve: (msg: JsonRpcMessage) => void;
+      reject: (err: Error) => void;
+    }
+  >();
   private buffer: Buffer = Buffer.alloc(0);
   private running = false;
   private timeoutMs = 120000; // 2 minute request timeout (was 30s — too short for large files)
@@ -72,9 +79,26 @@ export class TypeLispLspClient {
         // LSP servers log diagnostics to stderr, ignore
       });
 
-      this.process.on("error", reject);
-      this.process.on("exit", () => {
+      // The child can die before a queued write drains; the exit handler
+      // rejects all pending requests, so swallow the stream error here.
+      this.process.stdin?.on("error", () => {
+        /* EPIPE after crash: pending requests are rejected on exit */
+      });
+
+      this.process.on("error", (err) => {
         this.running = false;
+        this.process = null;
+        this.rejectAllPending(new Error(`TypeLisp LSP server error: ${err.message}`));
+        reject(err);
+      });
+      this.process.on("exit", (code, signal) => {
+        this.running = false;
+        this.process = null;
+        this.rejectAllPending(
+          new Error(
+            `TypeLisp LSP server exited unexpectedly (code=${code}, signal=${signal ?? "none"})`
+          )
+        );
       });
 
       // Send initialize with timeout
@@ -98,11 +122,19 @@ export class TypeLispLspClient {
 
   stop(): void {
     this.running = false;
+    this.rejectAllPending(new Error("TypeLisp LSP client stopped"));
     if (this.process) {
       this.process.stdin?.end();
       this.process.kill();
       this.process = null;
     }
+  }
+
+  private rejectAllPending(error: Error): void {
+    for (const [, entry] of this.pending) {
+      entry.reject(error);
+    }
+    this.pending.clear();
   }
 
   private processBuffer(): void {
@@ -125,9 +157,9 @@ export class TypeLispLspClient {
       try {
         const msg: JsonRpcMessage = JSON.parse(content);
         if (msg.id !== undefined && this.pending.has(msg.id)) {
-          const resolve = this.pending.get(msg.id)!;
+          const entry = this.pending.get(msg.id)!;
           this.pending.delete(msg.id);
-          resolve(msg);
+          entry.resolve(msg);
         }
       } catch (e) {
         // Ignore parse errors
@@ -144,7 +176,7 @@ export class TypeLispLspClient {
 
       this.requestId++;
       const id = this.requestId;
-      this.pending.set(id, resolve);
+      this.pending.set(id, { method, resolve, reject });
 
       const timeout = setTimeout(() => {
         this.pending.delete(id);
@@ -165,6 +197,18 @@ export class TypeLispLspClient {
         this.process.stdin?.write(header + content, (err) => {
           if (err) {
             clearTimeout(timeout);
+            const code = (err as NodeJS.ErrnoException).code;
+            if (code === "EPIPE") {
+              // The child closed its stdin or died. Reject everything now
+              // with the crash error instead of waiting for the request
+              // timeout; the exit handler also fires, but pending is already
+              // cleared so it becomes a no-op.
+              this.running = false;
+              this.rejectAllPending(
+                new Error("TypeLisp LSP server exited unexpectedly (write EPIPE)")
+              );
+              return;
+            }
             this.pending.delete(id);
             reject(err);
           }

@@ -32,6 +32,7 @@ export declare class TypeLispLspClient {
     getProcess(): ChildProcess | null;
     start(): Promise<void>;
     stop(): void;
+    private rejectAllPending;
     private processBuffer;
     sendRequest(method: string, params: any): Promise<JsonRpcMessage>;
     openDocument(uri: string, text: string): Promise<void>;

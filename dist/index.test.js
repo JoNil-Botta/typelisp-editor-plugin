@@ -61,6 +61,43 @@ describe("LSP client", () => {
             client.stop();
         }
     });
+    it("rejects in-flight requests immediately when the server crashes", async () => {
+        // Fake LSP server: answers initialize, then hangs on everything else.
+        const fakeLsp = path.join(tmpDir, "fake-lsp.js");
+        fs.writeFileSync(fakeLsp, `#!/usr/bin/env node
+let buf = Buffer.alloc(0);
+process.stdin.on("data", (d) => {
+  buf = Buffer.concat([buf, d]);
+  for (;;) {
+    const h = buf.indexOf("\\r\\n\\r\\n");
+    if (h === -1) break;
+    const m = buf.slice(0, h).toString().match(/Content-Length: (\\d+)/);
+    if (!m) break;
+    const len = parseInt(m[1], 10), start = h + 4;
+    if (buf.length < start + len) break;
+    const msg = JSON.parse(buf.slice(start, start + len).toString());
+    buf = buf.slice(start + len);
+    if (msg.method === "initialize") {
+      const out = JSON.stringify({ jsonrpc: "2.0", id: msg.id, result: { capabilities: {} } });
+      process.stdout.write("Content-Length: " + Buffer.byteLength(out) + "\\r\\n\\r\\n" + out);
+    }
+    // Everything else: never respond, so the request stays in flight.
+  }
+});
+`, "utf-8");
+        fs.chmodSync(fakeLsp, 0o755);
+        const client = new TypeLispLspClient(fakeLsp, []);
+        await client.start();
+        const pending = client.listFunctions("file:///hang.tl");
+        // Give the request time to reach the server, then kill it mid-flight.
+        await new Promise((r) => setTimeout(r, 300));
+        client.getProcess()?.kill("SIGKILL");
+        const start = Date.now();
+        await expect(pending).rejects.toThrow(/exited unexpectedly/i);
+        const elapsed = Date.now() - start;
+        expect(elapsed).toBeLessThan(5000); // reject on exit, not after the 120s timeout
+        client.stop();
+    }, 10000);
     it("patch works on large files", async () => {
         const largeFile = path.join(tmpDir, "large.tl");
         const lines = [];
