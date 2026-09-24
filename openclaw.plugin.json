@@ -36,10 +36,8 @@
       "typelisp_edit_format",
       "typelisp_edit_read",
       "typelisp_edit_move",
-      "typelisp_edit_rename",
       "typelisp_edit_expand_macro",
       "typelisp_edit_get_type",
-      "typelisp_edit_find_references",
       "typelisp_edit_batch",
       "typelisp_edit_project_search"
     ]

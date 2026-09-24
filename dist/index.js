@@ -490,41 +490,6 @@ export default defineToolPlugin({
             },
         }),
         tool({
-            name: "typelisp_edit_rename",
-            label: "Rename in TypeLisp File",
-            description: "**MANDATORY for .tl files** — Rename all occurrences of a name by old name or at a position. NEVER use `edit`/`write`/`apply_patch` on .tl files; those tools break s-expressions.",
-            parameters: Type.Object({
-                file: Type.String({ description: "Path to the .tl file to edit." }),
-                name: Type.Optional(Type.String({ description: "Old name to replace." })),
-                position: Type.Optional(Type.Object({
-                    line: Type.Number({ description: "0-indexed line number." }),
-                    character: Type.Number({ description: "0-indexed character offset." }),
-                }, { description: "Position-based rename (alternative to name)." })),
-                new_name: Type.String({ description: "New name to replace with." }),
-                dry_run: Type.Optional(Type.Boolean({ description: "Preview diff without writing." })),
-            }),
-            execute: async ({ file, name, position, new_name, dry_run }, config) => {
-                if (!name && !position) {
-                    return { success: false, error: "Either 'name' or 'position' is required." };
-                }
-                const client = await getClient(config.typelispPath, config.stdlibRoots, file);
-                const uri = makeUri(file);
-                const text = readFile(file);
-                const result = await withDocument(client, uri, text, () => client.rename(uri, name, position, new_name));
-                if (!result.success) {
-                    return { success: false, error: result.error || "rename failed" };
-                }
-                const finalText = result.text;
-                if (dry_run) {
-                    return { success: true, dryRun: true, diff: { old: text, new: finalText } };
-                }
-                writeFile(file, finalText);
-                await syncDocument(client, uri, finalText);
-                const desc = position ? `at line ${position.line}, col ${position.character}` : `'${name}'`;
-                return { success: true, message: `Renamed ${desc} to '${new_name}' in ${file}` };
-            },
-        }),
-        tool({
             name: "typelisp_edit_expand_macro",
             label: "Expand TypeLisp Macro",
             description: "Get the text of a top-level form by name (macro expansion placeholder).",
@@ -563,25 +528,6 @@ export default defineToolPlugin({
                     return { success: false, error: result.error || "getType failed" };
                 }
                 return { success: true, type: result.type };
-            },
-        }),
-        tool({
-            name: "typelisp_edit_find_references",
-            label: "Find TypeLisp References",
-            description: "Find all references to a name in a .tl file.",
-            parameters: Type.Object({
-                file: Type.String({ description: "Path to the .tl file." }),
-                name: Type.String({ description: "Name to find references for." }),
-            }),
-            execute: async ({ file, name }, config) => {
-                const client = await getClient(config.typelispPath, config.stdlibRoots, file);
-                const uri = makeUri(file);
-                const text = readFile(file);
-                const result = await withDocument(client, uri, text, () => client.findReferences(uri, name));
-                if (!result.success) {
-                    return { success: false, error: result.error || "findReferences failed" };
-                }
-                return { success: true, references: result.references };
             },
         }),
         tool({

@@ -131,14 +131,6 @@ export declare class TypeLispLspClient {
         text?: string;
         error?: string;
     }>;
-    rename(uri: string, oldName: string | undefined, position: {
-        line: number;
-        character: number;
-    } | undefined, newName: string): Promise<{
-        success: boolean;
-        text?: string;
-        error?: string;
-    }>;
     expandMacro(uri: string, name: string): Promise<{
         success: boolean;
         text?: string;
@@ -150,11 +142,6 @@ export declare class TypeLispLspClient {
     }): Promise<{
         success: boolean;
         type?: string;
-        error?: string;
-    }>;
-    findReferences(uri: string, name: string): Promise<{
-        success: boolean;
-        references?: any[];
         error?: string;
     }>;
     batch(uri: string, operations: Array<{

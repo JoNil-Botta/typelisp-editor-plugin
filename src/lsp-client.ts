@@ -546,22 +546,6 @@ export class TypeLispLspClient {
     };
   }
 
-  async rename(uri: string, oldName: string | undefined, position: { line: number; character: number } | undefined, newName: string): Promise<{ success: boolean; text?: string; error?: string }> {
-    const params: any = {
-      textDocument: { uri },
-      newName,
-    };
-    if (oldName) params.oldName = oldName;
-    if (position) params.position = position;
-
-    const resp = await this.sendRequest("tl/rename", params);
-    return {
-      success: resp.result?.success || false,
-      text: resp.result?.text,
-      error: resp.error?.message,
-    };
-  }
-
   async expandMacro(uri: string, name: string): Promise<{ success: boolean; text?: string; error?: string }> {
     const resp = await this.sendRequest("tl/expandMacro", {
       textDocument: { uri },
@@ -583,18 +567,6 @@ export class TypeLispLspClient {
       success: resp.result?.success || false,
       type: resp.result?.type,
       error: resp.result?.error || resp.error?.message,
-    };
-  }
-
-  async findReferences(uri: string, name: string): Promise<{ success: boolean; references?: any[]; error?: string }> {
-    const resp = await this.sendRequest("tl/findReferences", {
-      textDocument: { uri },
-      name,
-    });
-    return {
-      success: resp.result?.success || false,
-      references: resp.result?.references,
-      error: resp.error?.message,
     };
   }
 
